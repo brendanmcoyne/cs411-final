@@ -3,13 +3,13 @@ import os
 import requests  
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from trading.db import db  # fix import to match your trading app structure
+from trading.db import db  
 from trading.utils.logger import configure_logger
 
 logger = logging.getLogger(__name__)
 configure_logger(logger)
 
-# Alpha Vantage API key from environment
+# Alpha Vantage API key from env
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 class Stocks(db.Model):
