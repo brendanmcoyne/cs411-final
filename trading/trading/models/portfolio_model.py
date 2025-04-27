@@ -3,9 +3,9 @@ import os
 import time
 from typing import List
 
-from playlist.models.song_model import Songs
-from playlist.utils.api_utils import get_random
-from playlist.utils.logger import configure_logger
+from trading.models.stock_model import Stocks
+from trading.utils.api_utils import get_random
+from trading.utils.logger import configure_logger
 
 logger = logging.getLogger(__name__)
 configure_logger(logger)
