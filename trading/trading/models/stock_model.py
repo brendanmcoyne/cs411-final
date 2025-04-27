@@ -1,17 +1,18 @@
 import logging
+import os
+import requests  
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-
-from playlist.db import db
-from playlist.utils.logger import configure_logger
-from playlist.utils.api_utils import get_random
-
+from trading.db import db  # fix import to match your trading app structure
+from trading.utils.logger import configure_logger
 
 logger = logging.getLogger(__name__)
 configure_logger(logger)
 
+# Alpha Vantage API key from environment
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
-class Songs(db.Model):
+class Stocks(db.Model):
     """Represents a song in the catalog.
 
     This model maps to the 'songs' table and stores metadata such as artist,
@@ -21,7 +22,7 @@ class Songs(db.Model):
     user interaction, and data-driven song operations.
     """
 
-    __tablename__ = "Songs"
+    __tablename__ = "Stocks"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     artist = db.Column(db.String, nullable=False)
