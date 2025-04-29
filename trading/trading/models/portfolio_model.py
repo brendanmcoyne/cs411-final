@@ -11,25 +11,19 @@ logger = logging.getLogger(__name__)
 configure_logger(logger)
 
 
-class PlaylistModel:
+class PortfolioModel:
     """
-    A class to manage a playlist of songs.
+    A class to manage a portfolio of stocks.
 
     """
 
     def __init__(self):
-        """Initializes the PlaylistModel with an empty playlist and the current track set to 1.
+        """Initializes the PortfolioModel with an empty portfolio.
 
-        The playlist is a list of Songs, and the current track number is 1-indexed.
-        The TTL (Time To Live) for song caching is set to a default value from the environment variable "TTL",
-        which defaults to 60 seconds if not set.
+        The portfolio is a list of Stocks.
 
         """
-        self.current_track_number = 1
-        self.playlist: List[int] = []
-        self._song_cache: dict[int, Songs] = {}
-        self._ttl: dict[int, float] = {}
-        self.ttl_seconds = int(os.getenv("TTL", 60))  # Default TTL is 60 seconds
+        self.portfolio: dict[Stock, int] = {}
 
 
     ##################################################
