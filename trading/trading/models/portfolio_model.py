@@ -93,6 +93,33 @@ class PortfolioModel:
         
         logger.info(f"Successfully removed {quantity} shares of stock {ticker} from the portfolio")
 
+    def calculate_portfolio_value(self) -> float:
+        """Calculates the full value of the user's portfolio
+        
+        Returns:
+            float: the full value of the user's portfolio in USD
+
+        Raises:
+            ValueError: If the portfolio is empty
+            500 error: If there is an issue retrieving current price
+        """
+        logger.info("Reveived request to calculate portfolio value")
+        self.check_if_empty()
+
+        total = 0.0
+        for ticker, quantity in self.portfolio.items():
+            try:
+                logger.info(f"Fetching price for {ticker}")
+                price = get_current_price(ticker)
+                subtotal = price * quantity
+                total += subtotal
+                logger.info(f"{quantity} shares of {ticker} at ${price} each: ${subtotal}")
+            except Exception as e:
+                logger.warning(f"Failed to get price for {ticker}: {e}")
+
+        logger.info(f"Successfully computed total portfolio value: ${total}")
+        return total
+
 
     def _get_stock_from_cache_or_db(self, ticker: str) -> Stocks:
         """

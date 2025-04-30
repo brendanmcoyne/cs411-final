@@ -263,7 +263,6 @@ def create_app(config_class=ProductionConfig) -> Flask:
     #
     ##########################################################
 
-    from trading.api.stock_api import StockAPI
 
     @app.route('/api/stock-price/<string:ticker>', methods=['GET'])
     @login_required
@@ -297,6 +296,97 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "status": "error",
                 "message": "Unexpected error while fetching stock price"
             }), 500)
+        
+
+    @app.route('/api/create-stock', methods=['POST'])
+    @login_required
+    def create_stock() -> Response:
+        """Route to create a new stock.
+
+        Expected JSON Input:
+            - ticker (str): The stock ticker
+
+        Returns:
+            JSON response indicating success or failure.
+
+        Raises:
+            500 error if there is an unexpected error
+            ValueError if there is an issue removing the stock
+        """
+        app.logger.info("Received request to create a new stock")
+
+        try:
+            data = request.get_json()
+            ticker = data.get("ticker", "").strip().upper()
+
+            if not ticker or not isinstance(ticker, str):
+                app.logger.warning("Missing or invalid ticker in request")
+                return make_response(jsonify({
+                    "status": "error",
+                    "message": "Missing or invalid 'ticker' in request body"
+                }), 400)
+
+            Stocks.create_stock(ticker=ticker)
+
+            app.logger.info(f"Stock '{ticker}' successfully added")
+            return make_response(jsonify({
+                "status": "success",
+                "message": f"Stock '{ticker}' created successfully"
+            }), 201)
+
+        except ValueError as ve:
+            app.logger.warning(f"Failed to create stock: {ve}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(ve)
+            }), 400)
+
+        except Exception as e:
+            app.logger.error(f"Unexpected error during stock creation: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "An internal error occurred while creating the stock",
+                "details": str(e)
+            }), 500)
+
+    @app.route('/api/delete-stock/<int:stock_id>', methods=['DELETE'])
+    @login_required
+    def delete_stock(stock_id: int) -> Response:
+        """
+        Route to delete a stock by ID.
+
+        Path Parameter:
+            - stock_id (int): The ID of the stock to delete.
+
+        Returns:
+            JSON response indicating success or failure.
+        """
+        try:
+            app.logger.info(f"Received request to delete stock with ID {stock_id}")
+
+            Stocks.delete_stock(stock_id)
+            app.logger.info(f"Successfully deleted stock with ID {stock_id}")
+
+            return make_response(jsonify({
+                "status": "success",
+                "message": f"Stock with ID {stock_id} deleted successfully"
+            }), 200)
+
+        except ValueError as ve:
+            app.logger.warning(f"Stock not found: {ve}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(ve)
+            }), 400)
+
+        except Exception as e:
+            app.logger.error(f"Failed to delete stock: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "An internal error occurred while deleting the stock",
+                "details": str(e)
+            }), 500)
+
 
     @app.route('/api/reset-songs', methods=['DELETE'])
     def reset_songs() -> Response:
@@ -326,6 +416,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "message": "An internal error occurred while deleting users",
                 "details": str(e)
             }), 500)
+
 
 
     @app.route('/api/create-song', methods=['POST'])
@@ -443,6 +534,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "message": "An internal error occurred while deleting the song",
                 "details": str(e)
             }), 500)
+        
 
 
     @app.route('/api/get-all-songs-from-catalog', methods=['GET'])
@@ -532,152 +624,98 @@ def create_app(config_class=ProductionConfig) -> Flask:
 
     ############################################################
     #
-    # Playlist Add / Remove
+    # Portfolio Add / Remove
     #
     ############################################################
 
 
-    @app.route('/api/add-song-to-playlist', methods=['POST'])
+    @app.route('/api/portfolio/add', methods=['POST'])
     @login_required
-    def add_song_to_playlist() -> Response:
-        """Route to add a song to the playlist by compound key (artist, title, year).
+    def add_stock_to_portfolio() -> Response:
+        """Adds quantity shares of a stock ticker to the user's portfolio.
 
-        Expected JSON Input:
-            - artist (str): The artist's name.
-            - title (str): The song title.
-            - year (int): The year the song was released.
+            Expected JSON input:
+                ticker (str): the ticker of the company
+                quantity (int): the number of shares to buy
 
-        Returns:
-            JSON response indicating success of the addition.
+            Returns:
+                JSON response indicating the success of the stock addition.
 
-        Raises:
-            400 error if required fields are missing or the song does not exist.
-            500 error if there is an issue adding the song to the playlist.
-
+            Raises:
+                500 error if there is an unexpected error
+                ValueError if there is an issue adding the stock
         """
-        try:
-            app.logger.info("Received request to add song to playlist")
+        data = request.get_json()
+        ticker = data.get("ticker", "").strip().upper()
+        quantity = data.get("quantity")
 
-            data = request.get_json()
-            required_fields = ["artist", "title", "year"]
-            missing_fields = [field for field in required_fields if field not in data]
-
-            if missing_fields:
-                app.logger.warning(f"Missing required fields: {missing_fields}")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": f"Missing required fields: {', '.join(missing_fields)}"
-                }), 400)
-
-            artist = data["artist"]
-            title = data["title"]
-
-            try:
-                year = int(data["year"])
-            except ValueError:
-                app.logger.warning(f"Invalid year format: {data['year']}")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": "Year must be a valid integer"
-                }), 400)
-
-            app.logger.info(f"Looking up song: {artist} - {title} ({year})")
-            song = Songs.get_song_by_compound_key(artist, title, year)
-
-            if not song:
-                app.logger.warning(f"Song not found: {artist} - {title} ({year})")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": f"Song '{title}' by {artist} ({year}) not found in catalog"
-                }), 400)
-
-            playlist_model.add_song_to_playlist(song)
-            app.logger.info(f"Successfully added song to playlist: {artist} - {title} ({year})")
-
-            return make_response(jsonify({
-                "status": "success",
-                "message": f"Song '{title}' by {artist} ({year}) added to playlist"
-            }), 201)
-
-        except Exception as e:
-            app.logger.error(f"Failed to add song to playlist: {e}")
+        if not ticker or not isinstance(quantity, int) or quantity <= 0:
             return make_response(jsonify({
                 "status": "error",
-                "message": "An internal error occurred while adding the song to the playlist",
-                "details": str(e)
-            }), 500)
+                "message": "Invalid input — must provide ticker and positive quantity"
+            }), 400)
 
-
-    @app.route('/api/remove-song-from-playlist', methods=['DELETE'])
-    @login_required
-    def remove_song_by_song_id() -> Response:
-        """Route to remove a song from the playlist by compound key (artist, title, year).
-
-        Expected JSON Input:
-            - artist (str): The artist's name.
-            - title (str): The song title.
-            - year (int): The year the song was released.
-
-        Returns:
-            JSON response indicating success of the removal.
-
-        Raises:
-            400 error if required fields are missing or the song does not exist in the playlist.
-            500 error if there is an issue removing the song.
-
-        """
         try:
-            app.logger.info("Received request to remove song from playlist")
-
-            data = request.get_json()
-            required_fields = ["artist", "title", "year"]
-            missing_fields = [field for field in required_fields if field not in data]
-
-            if missing_fields:
-                app.logger.warning(f"Missing required fields: {missing_fields}")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": f"Missing required fields: {', '.join(missing_fields)}"
-                }), 400)
-
-            artist = data["artist"]
-            title = data["title"]
-
-            try:
-                year = int(data["year"])
-            except ValueError:
-                app.logger.warning(f"Invalid year format: {data['year']}")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": "Year must be a valid integer"
-                }), 400)
-
-            app.logger.info(f"Looking up song to remove: {artist} - {title} ({year})")
-            song = Songs.get_song_by_compound_key(artist, title, year)
-
-            if not song:
-                app.logger.warning(f"Song not found in catalog: {artist} - {title} ({year})")
-                return make_response(jsonify({
-                    "status": "error",
-                    "message": f"Song '{title}' by {artist} ({year}) not found in catalog"
-                }), 400)
-
-            playlist_model.remove_song_by_song_id(song.id)
-            app.logger.info(f"Successfully removed song from playlist: {artist} - {title} ({year})")
-
+            portfolio_model.add_stock_to_portfolio(ticker, quantity)
             return make_response(jsonify({
                 "status": "success",
-                "message": f"Song '{title}' by {artist} ({year}) removed from playlist"
+                "message": f"Added {quantity} shares of {ticker} to portfolio"
             }), 200)
-
-        except Exception as e:
-            app.logger.error(f"Failed to remove song from playlist: {e}")
+        except ValueError as e:
             return make_response(jsonify({
                 "status": "error",
-                "message": "An internal error occurred while removing the song from the playlist",
-                "details": str(e)
+                "message": str(e)
+            }), 400)
+        except Exception as e:
+            app.logger.error(f"Unexpected error: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Internal server error"
             }), 500)
+        
+    @app.route('/api/portfolio/remove', methods=['POST'])
+    @login_required
+    def remove_stock_from_portfolio() -> Response:
+        """Removes quantity shares of a stock ticker from the user's portfolio.
 
+        Expected JSON input:
+                ticker (str): the ticker of the company
+                quantity (int): the number of shares to sell
+
+            Returns:
+                JSON response indicating the success of the stock sale.
+
+            Raises:
+                500 error if there is an unexpected error
+                ValueError if there is an issue removing the stock
+        """
+        data = request.get_json()
+        ticker = data.get("ticker", "").strip().upper()
+        quantity = data.get("quantity")
+
+        if not ticker or not isinstance(quantity, int) or quantity <= 0:
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Invalid input — must provide ticker and positive quantity"
+            }), 400)
+
+        try:
+            portfolio_model.remove_stock_from_portfolio(ticker, quantity)
+            return make_response(jsonify({
+                "status": "success",
+                "message": f"Removed {quantity} shares of {ticker} from portfolio"
+            }), 200)
+        except ValueError as e:
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 400)
+        except Exception as e:
+            app.logger.error(f"Unexpected error: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Internal server error"
+            }), 500)
 
     @app.route('/api/clear-playlist', methods=['POST'])
     @login_required
@@ -713,9 +751,44 @@ def create_app(config_class=ProductionConfig) -> Flask:
 
     ############################################################
     #
-    # View Playlist
+    # Portfolio Functions
     #
     ############################################################
+    @app.route('/api/portfolio/value', methods=['GET'])
+    @login_required
+    def get_portfolio_value() -> Response:
+        """Returns the total current value of the user's portfolio.
+
+        Returns:
+            JSON response with total value or error message.
+
+        Raises:
+            500 error if there is an unexpected error
+            ValueError if there is an issue removing the stock
+        """
+        app.logger.info("Received request for portfolio value")
+
+        try:
+            value = portfolio_model.calculate_portfolio_value()
+            return make_response(jsonify({
+                "status": "success",
+                "portfolio_value": round(value, 2)
+            }), 200)
+
+        except ValueError as e:
+            app.logger.warning(f"Portfolio error: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 400)
+
+        except Exception as e:
+            app.logger.error(f"Unexpected error calculating portfolio value: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Internal error while calculating portfolio value",
+                "details": str(e)
+            }), 500)
 
 
     @app.route('/api/get-all-songs-from-playlist', methods=['GET'])
