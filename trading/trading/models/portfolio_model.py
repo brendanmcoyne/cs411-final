@@ -20,10 +20,10 @@ class PortfolioModel:
     def __init__(self):
         """Initializes the PortfolioModel with an empty portfolio.
 
-        The portfolio is a list of Stocks.
+        portfolio (dict[Stocks, int]) - A dictionary mapping keys (Stocks) to the number of current shares owned
 
         """
-        self.portfolio: dict[Stock, int] = {}
+        self.portfolio: dict[Stocks, int] = {}
 
 
     ##################################################

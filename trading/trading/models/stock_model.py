@@ -13,120 +13,102 @@ configure_logger(logger)
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 class Stocks(db.Model):
-    """Represents a song in the catalog.
+    """Represents a stock holding in the portfolio.
 
-    This model maps to the 'songs' table and stores metadata such as artist,
-    title, genre, release year, and duration. It also tracks play count.
+    This model maps to the 'stocks' table and stores metadata such as ticker
+    and current price.
 
-    Used in a Flask-SQLAlchemy application for playlist management,
-    user interaction, and data-driven song operations.
+    Used in a Flask-SQLAlchemy application for stock portfolio management.
     """
 
     __tablename__ = "Stocks"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    artist = db.Column(db.String, nullable=False)
-    title = db.Column(db.String, nullable=False)
-    year = db.Column(db.Integer, nullable=False)
-    genre = db.Column(db.String, nullable=False)
-    duration = db.Column(db.Integer, nullable=False)
-    play_count = db.Column(db.Integer, nullable=False, default=0)
+    ticker = db.Column(db.String, nullable=False)
+    current_price = db.Column(db.Float, nullable=False)
 
     def validate(self) -> None:
-        """Validates the song instance before committing to the database.
+        """Validates the stock instance before committing to the database.
 
         Raises:
             ValueError: If any required fields are invalid.
         """
-        if not self.artist or not isinstance(self.artist, str):
-            raise ValueError("Artist must be a non-empty string.")
-        if not self.title or not isinstance(self.title, str):
-            raise ValueError("Title must be a non-empty string.")
-        if not isinstance(self.year, int) or self.year <= 1900:
-            raise ValueError("Year must be an integer greater than 1900.")
-        if not self.genre or not isinstance(self.genre, str):
-            raise ValueError("Genre must be a non-empty string.")
-        if not isinstance(self.duration, int) or self.duration <= 0:
-            raise ValueError("Duration must be a positive integer.")
+        if not self.ticker or not isinstance(self.ticker, str):
+            raise ValueError("Ticker must be a non-empty string.")
+        if not isinstance(self.current_price, (int, float)) or self.current_price <= 0:
+            raise ValueError("Current price must be a positive number.")
 
     @classmethod
-    def create_song(cls, artist: str, title: str, year: int, genre: str, duration: int) -> None:
+    def create_song(cls, ticker: str, current_price: float) -> None:
         """
-        Creates a new song in the songs table using SQLAlchemy.
+        Creates a new stock in the stocks table using SQLAlchemy.
 
         Args:
-            artist (str): The artist's name.
-            title (str): The song title.
-            year (int): The year the song was released.
-            genre (str): The song genre.
-            duration (int): The duration of the song in seconds.
+            ticker (str): Stock ticker symbol.
+            current_price (float): Current price per share.
 
         Raises:
-            ValueError: If any field is invalid or if a song with the same compound key already exists.
-            SQLAlchemyError: For any other database-related issues.
+            ValueError: If validation fails or if stock with the same ticker already exists.
+            SQLAlchemyError: For database-related issues.
         """
-        logger.info(f"Received request to create song: {artist} - {title} ({year})")
-
+        logger.info(f"Received request to create stock: {ticker}")
         try:
-            song = Songs(
-                artist=artist.strip(),
-                title=title.strip(),
-                year=year,
-                genre=genre.strip(),
-                duration=duration
+            stock = Stocks(
+                ticker=ticker.strip().upper(),
+                current_price=current_price
             )
-            song.validate()
+            stock.validate()
         except ValueError as e:
             logger.warning(f"Validation failed: {e}")
             raise
 
         try:
-            # Check for existing song with same compound key (artist, title, year)
-            existing = Songs.query.filter_by(artist=artist.strip(), title=title.strip(), year=year).first()
+            # Check if stock with same ticker already exists
+            existing = Stocks.query.filter_by(ticker=ticker.strip().upper()).first()
             if existing:
-                logger.error(f"Song already exists: {artist} - {title} ({year})")
-                raise ValueError(f"Song with artist '{artist}', title '{title}', and year {year} already exists.")
+                logger.error(f"Stock already exists: {ticker}")
+                raise ValueError(f"Stock with ticker '{ticker}' already exists.")
 
-            db.session.add(song)
+            db.session.add(stock)
             db.session.commit()
-            logger.info(f"Song successfully added: {artist} - {title} ({year})")
+            logger.info(f"Stock successfully added: {ticker}")
 
         except IntegrityError:
-            logger.error(f"Song already exists: {artist} - {title} ({year})")
+            logger.error(f"Stock already exists: {ticker}")
             db.session.rollback()
-            raise ValueError(f"Song with artist '{artist}', title '{title}', and year {year} already exists.")
+            raise ValueError(f"Stock with ticker '{ticker}' already exists.")
 
         except SQLAlchemyError as e:
-            logger.error(f"Database error while creating song: {e}")
+            logger.error(f"Database error while creating stock: {e}")
             db.session.rollback()
             raise
 
     @classmethod
-    def delete_song(cls, song_id: int) -> None:
+    def delete_stock(cls, stock_id: int) -> None:
         """
-        Permanently deletes a song from the catalog by ID.
+        Permanently deletes a stock from the database by ID.
 
         Args:
-            song_id (int): The ID of the song to delete.
+            stock_id (int): The ID of the stock to delete.
 
         Raises:
-            ValueError: If the song with the given ID does not exist.
+            ValueError: If the stock with the given ID does not exist.
             SQLAlchemyError: For any database-related issues.
         """
-        logger.info(f"Received request to delete song with ID {song_id}")
+        logger.info(f"Received request to delete stock with ID {stock_id}")
 
         try:
-            song = cls.query.get(song_id)
-            if not song:
-                logger.warning(f"Attempted to delete non-existent song with ID {song_id}")
-                raise ValueError(f"Song with ID {song_id} not found")
+            stock = cls.query.get(stock_id)
+            if not stock:
+                logger.warning(f"Attempted to delete non-existent stock with ID {stock_id}")
+                raise ValueError(f"Stock with ID {stock_id} not found")
 
-            db.session.delete(song)
+            db.session.delete(stock)
             db.session.commit()
-            logger.info(f"Successfully deleted song with ID {song_id}")
+            logger.info(f"Successfully deleted stock with ID {stock_id}")
 
         except SQLAlchemyError as e:
-            logger.error(f"Database error while deleting song with ID {song_id}: {e}")
+            logger.error(f"Database error while deleting stock with ID {stock_id}: {e}")
             db.session.rollback()
             raise
 
