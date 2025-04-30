@@ -46,3 +46,22 @@ def get_current_price(cls, ticker: str) -> float:
     except Exception as e:
         logger.error(f"Failed to get price for {ticker}: {e}", exc_info=True)
         raise ValueError(f"Could not fetch price for {ticker}")
+    
+def is_valid_ticker(ticker: str) -> bool:
+    params = {
+        "function": "SYMBOL_SEARCH",
+        "keywords": ticker.upper(),
+        "apikey": API_KEY
+    }
+
+    try:
+        response = requests.get("https://www.alphavantage.co/query", params=params, timeout=5)
+        response.raise_for_status()
+        matches = response.json().get("bestMatches", [])
+
+        return any(match.get("1. symbol", "").upper() == ticker.upper() for match in matches)
+
+    except Exception as e:
+        logger.error(f"Error validating ticker {ticker}: {e}")
+        return False
+

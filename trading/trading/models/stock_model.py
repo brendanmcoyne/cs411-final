@@ -5,6 +5,8 @@ import requests
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from trading.db import db  
 from trading.utils.logger import configure_logger
+from trading.utils.api_utils import get_current_price, is_valid_ticker
+
 
 logger = logging.getLogger(__name__)
 configure_logger(logger)
@@ -39,23 +41,25 @@ class Stocks(db.Model):
             raise ValueError("Current price must be a positive number.")
 
     @classmethod
-    def create_song(cls, ticker: str, current_price: float) -> None:
+    def create_stock(cls, ticker: str, current_price: float) -> None:
         """
         Creates a new stock in the stocks table using SQLAlchemy.
 
         Args:
             ticker (str): Stock ticker symbol.
-            current_price (float): Current price per share.
 
         Raises:
             ValueError: If validation fails or if stock with the same ticker already exists.
             SQLAlchemyError: For database-related issues.
         """
         logger.info(f"Received request to create stock: {ticker}")
+        if not is_valid_ticker(ticker):
+            logger.warning(f"Invalid ticker symbol: {ticker}")
+            raise ValueError(f"Ticker '{ticker}' is not a valid stock symbol.")
         try:
             stock = Stocks(
                 ticker=ticker.strip().upper(),
-                current_price=current_price
+                current_price=get_current_price(ticker)
             )
             stock.validate()
         except ValueError as e:
@@ -111,36 +115,69 @@ class Stocks(db.Model):
             logger.error(f"Database error while deleting stock with ID {stock_id}: {e}")
             db.session.rollback()
             raise
+    
 
     @classmethod
-    def get_song_by_id(cls, song_id: int) -> "Songs":
+    def update_stock(cls, ticker: str) -> None:
         """
-        Retrieves a song from the catalog by its ID.
+        Updates the current price of a stock to reflect the new value.
 
         Args:
-            song_id (int): The ID of the song to retrieve.
-
-        Returns:
-            Songs: The song instance corresponding to the ID.
+            ticker (string): The ID of the stock to delete.
 
         Raises:
-            ValueError: If no song with the given ID is found.
-            SQLAlchemyError: If a database error occurs.
+            ValueError: If the stock with the given ID does not exist.
+            SQLAlchemyError: For any database-related issues.
         """
-        logger.info(f"Attempting to retrieve song with ID {song_id}")
+        logger.info(f"Received request to update stock price of stock {ticker}")
+        price = get_current_price(ticker)
 
         try:
-            song = cls.query.get(song_id)
+            stock = cls.query.filter_by(ticker=ticker.upper()).first()
+            if not stock:
+                logger.warning(f"Attempted to update non-existent stock {ticker}")
+                raise ValueError(f"Stock with ticker: {ticker} not found")
 
-            if not song:
-                logger.info(f"Song with ID {song_id} not found")
-                raise ValueError(f"Song with ID {song_id} not found")
+            logger.info(f"Updating stock {ticker} price from {stock.current_price} to {price}")
+            stock.current_price = price
 
-            logger.info(f"Successfully retrieved song: {song.artist} - {song.title} ({song.year})")
-            return song
+            db.session.commit()
+            logger.info(f"Successfully updated stock {ticker} to new price: {price}")
 
         except SQLAlchemyError as e:
-            logger.error(f"Database error while retrieving song by ID {song_id}: {e}")
+            logger.error(f"Database error while updating stock {ticker}: {e}")
+            db.session.rollback()
+            raise
+
+    @classmethod
+    def get_stock_by_ticker(cls, ticker: str) -> "Stocks":
+        """
+        Retrieves a stock from the catalog by its ticker.
+
+        Args:
+            ticker (str): The ticker of the stock to retrieve.
+
+        Returns:
+            Stocks: The stock instance corresponding to the ticker.
+
+        Raises:
+            ValueError: If no stock with the given ticker is found.
+            SQLAlchemyError: If a database error occurs.
+        """
+        logger.info(f"Attempting to retrieve stock {ticker}")
+
+        try:
+            stock = cls.query.filter_by(ticker=ticker.upper()).first()
+
+            if not stock:
+                logger.info(f"Stock {ticker} not found")
+                raise ValueError(f"Stock {ticker} not found")
+
+            logger.info(f"Successfully retrieved stock: {stock.ticker} - {stock.current_price}")
+            return stock
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while retrieving stock {ticker}: {e}")
             raise
 
     @classmethod

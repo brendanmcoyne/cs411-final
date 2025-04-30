@@ -20,99 +20,115 @@ class PortfolioModel:
     def __init__(self):
         """Initializes the PortfolioModel with an empty portfolio.
 
-        portfolio (dict[Stocks, int]) - A dictionary mapping keys (Stocks) to the number of current shares owned
-
+        portfolio (dict[str, int]) - A dictionary mapping keys (stock tickers) to the number of current shares owned
+        The TTL (Time To Live) for song caching is set to a default value from the environment variable "TTL",
+        which defaults to 60 seconds if not set.
         """
-        self.portfolio: dict[Stocks, int] = {}
+        self.portfolio: dict[str, int] = {}
+        self._stock_cache: dict[int, Stocks] = {}
+        self._ttl: dict[int, float] = {}
+        self.ttl_seconds = int(os.getenv("TTL", 60))  # Default TTL is 60 seconds
 
 
     ##################################################
-    # Song Management Functions
+    # Stock Management Functions
     ##################################################
 
-    def _get_song_from_cache_or_db(self, song_id: int) -> Songs:
+    def add_stock_to_portfolio(self, ticker: str, quantity: int) -> None:
         """
-        Retrieves a song by ID, using the internal cache if possible.
-
-        This method checks whether a cached version of the song is available
-        and still valid. If not, it queries the database, updates the cache, and returns the song.
+        Adds quantity number of a stock to the portfolio by ticker, using the cache or database lookup.
 
         Args:
-            song_id (int): The unique ID of the song to retrieve.
-
-        Returns:
-            Songs: The song object corresponding to the given ID.
+            ticker (string): The ticker of the stock to add to the portfolio.
+            quantity (int): The number of shares of stock ticker to add to the portfolio
 
         Raises:
-            ValueError: If the song cannot be found in the database.
+            ValueError: If the ticker is invalid.
+        """
+
+        logger.info(f"Received request to add {quantity} shares of stocke {ticker} to the portfolio")
+
+        ticker = self.validate_stock_ticker(ticker, check_in_portfolio=False)
+
+        if ticker in self.portfolio:
+            self.portfolio[ticker] += quantity
+        else:
+            try:
+                stock = self._get_stock_from_cache_or_db(stock)
+            except ValueError as e:
+                logger.error(f"Failed to add stock: {e}")
+                raise
+            self.portfolio[ticker] = quantity
+
+        logger.info(f"Successfully added to portfolio: {ticker} - {quantity} shares")
+
+    def remove_stock_from_portfolio(self, ticker: str, quantity: int) -> None:
+        """Removes quantity of stock ticker from the portolio by its ticker.
+
+        Args:
+            ticker (str): The ticker of the stock to remove from the portfolio.
+            quantity (int): The number of shares of stock to remove.
+
+        Raises:
+            ValueError: If the ticker is invalid, if stock is not in portfolio, or 
+                there is less than quantity shares of stock in portfolio
+
+        """
+        logger.info(f"Received request to remove {quantity} shares of stock {ticker}")
+
+        self.check_if_empty()
+        ticker = self.validate_stock_ticker(ticker)
+
+        if ticker not in self.portfolio:
+            logger.warning(f"Stock {ticker} not found in the portfolio")
+            raise ValueError(f"Stock {ticker} not found in the portfolio")
+
+        if self.portfolio[ticker] < quantity:
+            logger.warning(f"Tried to remove {quantity} shares of Stock {ticker} from portfolio but only found {self.portfolio[ticker]}")
+            raise ValueError(f"Tried to remove {quantity} shares of Stock {ticker} from portfolio but only found {self.portfolio[ticker]}")
+        elif self.portfolio[ticker] == quantity:
+            del(self.portfolio[ticker])
+        else:
+            self.portfolio[ticker] -= quantity
+        
+        logger.info(f"Successfully removed {quantity} shares of stock {ticker} from the portfolio")
+
+
+    def _get_stock_from_cache_or_db(self, ticker: str) -> Stocks:
+        """
+        Retrieves a stock by ticker, using the internal cache if possible.
+
+        This method checks whether a cached version of the stock is available
+        and still valid. If not, it queries the database, updates the cache, and returns the stock.
+
+        Args:
+            ticker (str): The unique ticker of the song to retrieve.
+
+        Returns:
+            Stocks: The stock object corresponding to the given ticker.
+
+        Raises:
+            ValueError: If the stock cannot be found in the database.
         """
         now = time.time()
 
-        if song_id in self._song_cache and self._ttl.get(song_id, 0) > now:
-            logger.debug(f"Song ID {song_id} retrieved from cache")
-            return self._song_cache[song_id]
+        if ticker in self._stock_cache and self._ttl.get(ticker, 0) > now:
+            logger.debug(f"Stock {ticker} retrieved from cache")
+            return self._stock_cache[ticker]
 
         try:
-            song = Songs.get_song_by_id(song_id)
-            logger.info(f"Song ID {song_id} loaded from DB")
+            stock = Stocks.get_stock_by_ticker(ticker)
+            logger.info(f"Stock {ticker} loaded from DB")
         except ValueError as e:
-            logger.error(f"Song ID {song_id} not found in DB: {e}")
-            raise ValueError(f"Song ID {song_id} not found in database") from e
+            logger.error(f"Stock {ticker} not found in DB: {e}")
+            raise ValueError(f"Stock {ticker} not found in database") from e
 
-        self._song_cache[song_id] = song
-        self._ttl[song_id] = now + self.ttl_seconds
-        return song
-
-    def add_song_to_playlist(self, song_id: int) -> None:
-        """
-        Adds a song to the playlist by ID, using the cache or database lookup.
-
-        Args:
-            song_id (int): The ID of the song to add to the playlist.
-
-        Raises:
-            ValueError: If the song ID is invalid or already exists in the playlist.
-        """
-        logger.info(f"Received request to add song with ID {song_id} to the playlist")
-
-        song_id = self.validate_song_id(song_id, check_in_playlist=False)
-
-        if song_id in self.playlist:
-            logger.error(f"Song with ID {song_id} already exists in the playlist")
-            raise ValueError(f"Song with ID {song_id} already exists in the playlist")
-
-        try:
-            song = self._get_song_from_cache_or_db(song_id)
-        except ValueError as e:
-            logger.error(f"Failed to add song: {e}")
-            raise
-
-        self.playlist.append(song.id)
-        logger.info(f"Successfully added to playlist: {song.artist} - {song.title} ({song.year})")
+        self._stock_cache[ticker] = stock
+        self._ttl[ticker] = now + self.ttl_seconds
+        return stock
 
 
-    def remove_song_by_song_id(self, song_id: int) -> None:
-        """Removes a song from the playlist by its song ID.
-
-        Args:
-            song_id (int): The ID of the song to remove from the playlist.
-
-        Raises:
-            ValueError: If the playlist is empty or the song ID is invalid.
-
-        """
-        logger.info(f"Received request to remove song with ID {song_id}")
-
-        self.check_if_empty()
-        song_id = self.validate_song_id(song_id)
-
-        if song_id not in self.playlist:
-            logger.warning(f"Song with ID {song_id} not found in the playlist")
-            raise ValueError(f"Song with ID {song_id} not found in the playlist")
-
-        self.playlist.remove(song_id)
-        logger.info(f"Successfully removed song with ID {song_id} from the playlist")
-
+    
     def remove_song_by_track_number(self, track_number: int) -> None:
         """Removes a song from the playlist by its track number (1-indexed).
 
@@ -445,42 +461,35 @@ class PortfolioModel:
     #
     ####################################################################################################
 
-    def validate_song_id(self, song_id: int, check_in_playlist: bool = True) -> int:
+    def validate_stock_ticker(self, ticker: str, check_in_portfolio: bool = True) -> str:
         """
-        Validates the given song ID.
+        Validates the given stock ID.
 
         Args:
-            song_id (int): The song ID to validate.
-            check_in_playlist (bool, optional): If True, verifies the ID is present in the playlist.
+            ticker (str): The stock ticker to validate.
+            check_in_portfolio (bool, optional): If True, verifies the ticker is present in the portfolio.
                                                 If False, skips that check. Defaults to True.
 
         Returns:
-            int: The validated song ID.
+            str: The validated stock ticker.
 
         Raises:
-            ValueError: If the song ID is not a non-negative integer,
-                        not found in the playlist (if check_in_playlist=True),
+            ValueError: If stock ticker is found in the portfolio (if check_in_portfolio=True),
                         or not found in the database.
         """
-        try:
-            song_id = int(song_id)
-            if song_id < 0:
-                raise ValueError
-        except ValueError:
-            logger.error(f"Invalid song id: {song_id}")
-            raise ValueError(f"Invalid song id: {song_id}")
 
-        if check_in_playlist and song_id not in self.playlist:
-            logger.error(f"Song with id {song_id} not found in playlist")
-            raise ValueError(f"Song with id {song_id} not found in playlist")
-
+        if check_in_portfolio and ticker not in self.portfolio:
+            logger.error(f"Stock {ticker} not found in portfolio")
+            raise ValueError(f"Stock {ticker} not found in portfolio")
         try:
-            self._get_song_from_cache_or_db(song_id)
+            stock = self._get_stock_from_cache_or_db(ticker)
         except Exception as e:
-            logger.error(f"Song with id {song_id} not found in database: {e}")
-            raise ValueError(f"Song with id {song_id} not found in database")
+            logger.error(f"Stock {ticker} not found in database: {e}")
+            raise ValueError(f"Stock {ticker} not found in database")
 
-        return song_id
+        
+
+        return ticker
 
     def validate_track_number(self, track_number: int) -> int:
         """
@@ -508,12 +517,12 @@ class PortfolioModel:
 
     def check_if_empty(self) -> None:
         """
-        Checks if the playlist is empty and raises a ValueError if it is.
+        Checks if the portfolio is empty and raises a ValueError if it is.
 
         Raises:
-            ValueError: If the playlist is empty.
+            ValueError: If the portfolio is empty.
 
         """
-        if not self.playlist:
-            logger.error("Playlist is empty")
-            raise ValueError("Playlist is empty")
+        if not self.portfolio:
+            logger.error("Portfolio is empty")
+            raise ValueError("Portfolio is empty")
