@@ -7,8 +7,9 @@ from config import ProductionConfig
 from trading.db import db
 from trading.models.stock_model import Stocks  # Stock model 
 from trading.models.user_model import Users  # User model
+from trading.models.portfolio_model import PortfolioModel
 from trading.utils.logger import configure_logger
-
+from trading.utils.api_utils import StockAPI
 
 load_dotenv()
 
@@ -49,7 +50,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
             "message": "Authentication required"
         }), 401)
 
-    playlist_model = PlaylistModel()
+    portfolio_model = PortfolioModel()
 
     @app.route('/api/health', methods=['GET'])
     def healthcheck() -> Response:
@@ -258,9 +259,44 @@ def create_app(config_class=ProductionConfig) -> Flask:
 
     ##########################################################
     #
-    # Songs
+    # Stocks
     #
     ##########################################################
+
+    from trading.api.stock_api import StockAPI
+
+    @app.route('/api/stock-price/<string:ticker>', methods=['GET'])
+    @login_required
+    def get_stock_price(ticker: str) -> Response:
+        """Retrieve the current stock price from Alpha Vantage via RapidAPI.
+        
+        Returns:
+            JSON response indicating success, the ticker, and the current price
+        
+        Raises:
+            500 error if there is an unexpected error
+            ValueError if there is an issue retrieving the price
+        """
+        try:
+            app.logger.info(f"Fetching current price for {ticker}")
+            price = StockAPI.get_current_price(ticker)
+            return make_response(jsonify({
+                "status": "success",
+                "ticker": ticker.upper(),
+                "current_price": price
+            }), 200)
+        except ValueError as e:
+            app.logger.warning(f"Error fetching price for {ticker}: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 400)
+        except Exception as e:
+            app.logger.error(f"Unexpected error: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Unexpected error while fetching stock price"
+            }), 500)
 
     @app.route('/api/reset-songs', methods=['DELETE'])
     def reset_songs() -> Response:

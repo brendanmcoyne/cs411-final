@@ -1,56 +1,48 @@
-import logging
 import os
 import requests
+import logging
 
-from boxing.utils.logger import configure_logger
+BASE_URL = "https://alpha-vantage.p.rapidapi.com/query"
+API_HOST = "alpha-vantage.p.rapidapi.com"
+API_KEY = os.getenv("RAPIDAPI_KEY")  
 
-
-logger = logging.getLogger(__name__)
-configure_logger(logger)
-
-
-RANDOM_ORG_URL = os.getenv("RANDOM_ORG_URL",
-                           "https://www.random.org/decimal-fractions/?num=1&dec=2&col=1&format=plain&rnd=new")
-
-
-def get_random() -> float:
-    """
-    Fetches a random float between 0 and 1 from random.org.
+def get_current_price(cls, ticker: str) -> float:
+    """Fetch the current stock price via RapidAPI.
+    
+    Args:
+        ticker (String) - The string for the Stock's ticker
 
     Returns:
-        float: The random number fetched from random.org.
-
-    Raises:
-        ValueError: If the response from random.org is not a valid float.
-        RuntimeError: If the request to random.org fails due to a timeout or other request-related error.
-
+        price (float) - The current most up to date value of the stock ticker refers to.
     """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Attempting to fetch price for ticker: {ticker}")
+
+    params = {
+        "function": "GLOBAL_QUOTE",
+        "symbol": ticker.upper(),
+        "datatype": "json"
+    }
+
+    headers = {
+        "x-rapidapi-host": cls.API_HOST,
+        "x-rapidapi-key": cls.API_KEY
+    }
+
     try:
-        logger.info(f"Fetching random number from {RANDOM_ORG_URL}")
-
-        response = requests.get(RANDOM_ORG_URL, timeout=5)
-
-        # Check if the request was successful
+        logger.debug(f"Sending request to Alpha Vantage with params: {params}")
+        response = requests.get(cls.BASE_URL, headers=headers, params=params, timeout=5)
         response.raise_for_status()
+        logger.debug("Received response from Alpha Vantage")
 
-        random_number_str = response.text.strip()
+        data = response.json()
+        logger.debug(f"Response JSON: {data}")
 
-        try:
-            random_number = float(random_number_str)
-        except ValueError:
-            logger.error(f"Invalid response from random.org: {random_number_str}")
-            raise ValueError(f"Invalid response from random.org: {random_number_str}")
+        price_str = data["Global Quote"]["05. price"]
+        price = float(price_str)
+        logger.info(f"Fetched price for {ticker}: {price}")
+        return price
 
-        logger.debug(f"Received random number: {random_number:.3f}")
-        logger.info(f"Successfully fetched random number")
-
-        return random_number
-
-    except requests.exceptions.Timeout:
-        logger.error("Request to random.org timed out.")
-        raise RuntimeError("Request to random.org timed out.")
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request to random.org failed: {e}")
-        raise RuntimeError(f"Request to random.org failed: {e}")
-
+    except Exception as e:
+        logger.error(f"Failed to get price for {ticker}: {e}", exc_info=True)
+        raise ValueError(f"Could not fetch price for {ticker}")

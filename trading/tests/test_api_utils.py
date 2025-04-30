@@ -1,60 +1,37 @@
 import pytest
-import requests
+from flask import Flask
+from trading.utils.api_utils import StockAPI
+from app import create_app  
 
-from playlist.utils.api_utils import get_random
-
-
-RANDOM_NUMBER = 4
+MOCK_PRICE = 123.45
 
 
 @pytest.fixture
-def mock_random_org(mocker):
-    # Patch the requests.get call
-    # requests.get returns an object, which we have replaced with a mock object
-    mock_response = mocker.Mock()
-    # We are giving that object a text attribute
-    mock_response.text = f"{RANDOM_NUMBER}"
-    mocker.patch("requests.get", return_value=mock_response)
-    return mock_response
+def app():
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["LOGIN_DISABLED"] = True 
+    yield app
 
-def test_get_random(mock_random_org):
-    """Test retrieving a random number from random.org.
 
-    """
-    result = get_random(10)
+@pytest.fixture
+def client(app):
+    return app.test_client()
 
-    # Assert that the result is the mocked random number
-    assert result == RANDOM_NUMBER, f"Expected random number {RANDOM_NUMBER}, but got {result}"
 
-    # Ensure that the correct URL was called
-    requests.get.assert_called_once_with("https://www.random.org/integers/?num=1&min=1&col=1&base=10&format=plain&rnd=new&max=10", timeout=5)
+@pytest.fixture
+def mock_get_price(mocker):
+    return mocker.patch.object(StockAPI, "get_current_price", return_value=MOCK_PRICE)
 
-def test_get_random_request_failure(mocker):
-    """Test handling of a request failure when calling random.org.
 
-    """
-    # Simulate a request failure
-    mocker.patch("requests.get", side_effect=requests.exceptions.RequestException("Connection error"))
+def test_get_stock_price_success(client, mock_get_price):
+    """Test /api/stock-price/<ticker> returns the correct mocked price."""
+    ticker = "AAPL"
+    response = client.get(f"/api/stock-price/{ticker}")
+    json_data = response.get_json()
 
-    with pytest.raises(RuntimeError, match="Request to random.org failed: Connection error"):
-        get_random(10)
-
-def test_get_random_timeout(mocker):
-    """Test handling of a timeout when calling random.org.
-
-    """
-    # Simulate a timeout
-    mocker.patch("requests.get", side_effect=requests.exceptions.Timeout)
-
-    with pytest.raises(RuntimeError, match="Request to random.org timed out."):
-        get_random(10)
-
-def test_get_random_invalid_response(mock_random_org):
-    """Test handling of an invalid response from random.org.
-
-    """
-    # Simulate an invalid response (non-digit)
-    mock_random_org.text = "invalid_response"
-
-    with pytest.raises(ValueError, match="Invalid response from random.org: invalid_response"):
-        get_random(10)
+    assert response.status_code == 200
+    assert json_data["status"] == "success"
+    assert json_data["ticker"] == ticker
+    assert json_data["current_price"] == MOCK_PRICE
+    mock_get_price.assert_called_once_with(ticker)

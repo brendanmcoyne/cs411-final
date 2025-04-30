@@ -4,7 +4,7 @@ import time
 from typing import List
 
 from trading.models.stock_model import Stocks
-from trading.utils.api_utils import get_random
+from trading.utils.api_utils import get_current_price
 from trading.utils.logger import configure_logger
 
 logger = logging.getLogger(__name__)
