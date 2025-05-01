@@ -6,6 +6,8 @@ BASE_URL = "https://alpha-vantage.p.rapidapi.com/query"
 API_HOST = "alpha-vantage.p.rapidapi.com"
 API_KEY = os.getenv("RAPIDAPI_KEY")  
 
+logger = logging.getLogger(__name__)
+
 def get_current_price(cls, ticker: str) -> float:
     """Fetch the current stock price via RapidAPI.
     
@@ -15,7 +17,6 @@ def get_current_price(cls, ticker: str) -> float:
     Returns:
         price (float) - The current most up to date value of the stock ticker refers to.
     """
-    logger = logging.getLogger(__name__)
     logger.info(f"Attempting to fetch price for ticker: {ticker}")
 
     params = {
@@ -48,6 +49,14 @@ def get_current_price(cls, ticker: str) -> float:
         raise ValueError(f"Could not fetch price for {ticker}")
     
 def is_valid_ticker(ticker: str) -> bool:
+    """Determines whether the ticker is an actual stock
+    
+    Args:
+        ticker (String) - The string for the Stock's ticker
+
+    Returns:
+        bool - True if it is a valid stock and false otherwise
+    """
     params = {
         "function": "SYMBOL_SEARCH",
         "keywords": ticker.upper(),
