@@ -154,26 +154,26 @@ def test_sell_stock_not_owned(portfolio_model, mocker):
     """Test error when trying to sell a stock not in portfolio."""
     portfolio_model.portfolio = {}
     
-    mocker.patch.object(portfolio_model, 'validate_stock_ticker', return_value="MSFT")
-    mocker.patch.object(portfolio_model, 'validate_shares_count', return_value=5)
-    mocker.patch.object(portfolio_model, 'check_if_empty')
-    
-    with pytest.raises(ValueError, match="You don't own any shares of MSFT"):
-        portfolio_model.sell_stock("MSFT", 5)
-
-
-def test_sell_more_shares_than_owned(portfolio_model, mocker):
-    """Test error when trying to sell more shares than owned."""
-    portfolio_model.portfolio = {"TSLA": 3}
-    
     mocker.patch.object(portfolio_model, 'validate_stock_ticker', return_value="TSLA")
     mocker.patch.object(portfolio_model, 'validate_shares_count', return_value=5)
     mocker.patch.object(portfolio_model, 'check_if_empty')
     
-    with pytest.raises(ValueError, match="You only have 3 shares of TSLA, but attempted to sell 5"):
+    with pytest.raises(ValueError, match="You don't own any shares of TSLA"):
         portfolio_model.sell_stock("TSLA", 5)
+
+
+def test_sell_more_shares_than_owned(portfolio_model, mocker):
+    """Test error when trying to sell more shares than owned."""
+    portfolio_model.portfolio = {"GOOGL": 3}
     
-    assert portfolio_model.portfolio["TSLA"] == 3
+    mocker.patch.object(portfolio_model, 'validate_stock_ticker', return_value="GOOGL")
+    mocker.patch.object(portfolio_model, 'validate_shares_count', return_value=5)
+    mocker.patch.object(portfolio_model, 'check_if_empty')
+    
+    with pytest.raises(ValueError, match="You only have 3 shares of GOOGL, but attempted to sell 5"):
+        portfolio_model.sell_stock("GOOGL", 5)
+    
+    assert portfolio_model.portfolio["GOOGL"] == 3
 
 
 def test_sell_stock_empty_portfolio(portfolio_model, mocker):
