@@ -102,6 +102,30 @@ This Flask-based trading application allows users to register, log in, and manag
 
 ---
 
+### Route: `/api/stock-details/<ticker>`
+- **Request Type**: GET  
+- **Purpose**: Retrieves detailed information about a specific stock, including current price, description, and historical data.  
+- **Request Parameter**:  
+  - `ticker` (Path String): The stock ticker symbol to look up  
+- **Response Format**: JSON  
+  - Content:  
+    ```json
+    {
+      "status": "success",
+      "stock_details": {
+        "ticker": "AAPL",
+        "price": 172.55,
+        "description": "Apple Inc. designs and sells consumer electronics...",
+        "history": [
+          { "date": "2024-04-29", "close": 169.30 },
+          { "date": "2024-04-30", "close": 171.50 }
+        ]
+      }
+    }
+    ```
+
+---
+
 ### Route: `/api/create-stock`
 - **Request Type**: POST  
 - **Purpose**: Adds a new stock to the database.  
@@ -185,4 +209,27 @@ This Flask-based trading application allows users to register, log in, and manag
   - Content:  
     ```json
     { "status": "success", "portfolio_value": 2167.45 }
+    ```
+
+### Route: `/api/portfolio/details`
+- **Request Type**: GET  
+- **Purpose**: Retrieves a detailed breakdown of the current user’s portfolio, including stock holdings and their values.  
+- **Response Format**: JSON  
+  - Content:  
+    ```json
+    {
+      "status": "success",
+      "portfolio": {
+        "AAPL": {
+          "shares": 5,
+          "price": 172.55,
+          "value": 862.75
+        },
+        "GOOGL": {
+          "shares": 2,
+          "price": 2805.67,
+          "value": 5611.34
+        }
+      }
+    }
     ```
