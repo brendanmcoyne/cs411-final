@@ -17,4 +17,5 @@ class ProductionConfig():
 class TestConfig():
     """Testing configuration."""
     TESTING = True
+    LOGIN_DISABLED = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'  # Use in-memory database for tests

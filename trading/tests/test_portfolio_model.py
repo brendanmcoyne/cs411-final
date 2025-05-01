@@ -2,6 +2,7 @@ import pytest
 
 from trading.models.portfolio_model import PortfolioModel
 from trading.models.stock_model import Stocks
+from trading.db import db
 
 
 @pytest.fixture()
@@ -199,3 +200,49 @@ def test_sell_stock_api_error(portfolio_model, stock_apple, mocker):
         portfolio_model.sell_stock("AAPL", 5)
     
     assert portfolio_model.portfolio["AAPL"] == 10
+
+##################################################
+# Calculate Portfolio Value Test Cases
+##################################################
+def test_calculate_portfolio_value_valid(mocker, stock_apple, stock_google):
+    """Tests that the total portfolio value is correctly calculated
+    for a portfolio with two valid stocks and mocked current prices.
+    """
+    model = PortfolioModel()
+    model.portfolio = {"AAPL": 2, "GOOGL": 1}
+
+    # Mock stock lookup
+    mocker.patch.object(model, "_get_stock_from_cache_or_db", side_effect=[stock_apple, stock_google])
+    
+    # Mock updated prices
+    mocker.patch.object(stock_apple, "update_stock", return_value=174.35)
+    mocker.patch.object(stock_google, "update_stock", return_value=2805.67)
+
+    value = model.calculate_portfolio_value()
+    expected = 2 * 174.35 + 1 * 2805.67
+    assert value == pytest.approx(expected, 0.01)
+
+def test_calculate_portfolio_value_empty():
+    """Tests that calculating the value of an empty portfolio
+    correctly raises a ValueError.
+    """
+    model = PortfolioModel()
+    model.portfolio = {}
+
+    with pytest.raises(ValueError, match="empty"):
+        model.calculate_portfolio_value()
+
+def test_calculate_portfolio_value_with_price_update(mocker, stock_apple):
+    """Tests that the total value uses the updated price from update_stock(),
+    not the original stored price, when computing the portfolio value.
+    """
+    model = PortfolioModel()
+    model.portfolio = {"AAPL": 3}
+
+    mocker.patch.object(model, "_get_stock_from_cache_or_db", return_value=stock_apple)
+    mocker.patch.object(stock_apple, "update_stock", return_value=200.0)
+
+    value = model.calculate_portfolio_value()
+    assert value == pytest.approx(600.0, 0.01)
+
+

@@ -51,7 +51,7 @@ class PortfolioModel:
         for ticker, quantity in self.portfolio.items():
             try:
                 logger.info(f"Fetching price for {ticker}")
-                stock = self._get_stock_from_cache_or_db(stock)
+                stock = self._get_stock_from_cache_or_db(ticker)
                 price = stock.update_stock()
                 subtotal = price * quantity
                 total += subtotal
@@ -163,7 +163,7 @@ class PortfolioModel:
             self.portfolio[stock_symbol] += shares
         else:
             try:
-                stock = self._get_stock_from_cache_or_db(stock)
+                stock = self._get_stock_from_cache_or_db(stock_symbol)
             except ValueError as e:
                 logger.error(f"Failed to add stock {stock_symbol}: {e}")
                 raise
@@ -225,7 +225,7 @@ class PortfolioModel:
         
         # Get current price
         try:
-            stock = self._get_stock_from_cache_or_db(stock)
+            stock = self._get_stock_from_cache_or_db(stock_symbol)
             price_per_share = stock.update_stock()
         except ValueError as e:
             logger.error(f"Failed to sell stock {stock_symbol}: {e}")
