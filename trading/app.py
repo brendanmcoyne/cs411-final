@@ -515,6 +515,38 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "details": str(e)
             }), 500)
 
+    @app.route('/api/stock-details/<string:ticker>', methods=['GET'])
+    @login_required
+    def stock_details(ticker: str) -> Response:
+        """Returns detailed information about a specific stock.
+
+        Returns:
+            JSON with stock current price, historical data, and description.
+        """
+        app.logger.info(f"Fetching detailed info for stock '{ticker}'")
+
+        try:
+            details = lookup_stock_details(ticker)
+            return make_response(jsonify({
+                "status": "success",
+                "stock_details": details
+            }), 200)
+
+        except ValueError as ve:
+            app.logger.warning(f"Stock detail lookup failed: {ve}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(ve)
+            }), 400)
+
+        except Exception as e:
+            app.logger.error(f"Unexpected error while retrieving stock details: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Internal error retrieving stock details",
+                "details": str(e)
+            }), 500)
+
 
     ############################################################
     #
@@ -554,5 +586,35 @@ def create_app(config_class=ProductionConfig) -> Flask:
             return make_response(jsonify({
                 "status": "error",
                 "message": "Internal error while calculating portfolio value",
+                "details": str(e)
+            }), 500)
+
+    @app.route('/api/portfolio/details', methods=['GET'])
+    @login_required
+    def get_portfolio_details() -> Response:
+        """Returns detailed information about the user's portfolio.
+
+        Returns:
+            JSON response with holdings and total value.
+
+        Raises:
+            500 error if there is an unexpected error
+        """
+        app.logger.info(f"Fetching portfolio details for user '{current_user.username}'")
+
+        try:
+            user = Users.query.filter_by(username=current_user.username).first()
+            portfolio_summary = portfolio_model.get_user_portfolio(user.id)
+
+            return make_response(jsonify({
+                "status": "success",
+                "portfolio": portfolio_summary
+            }), 200)
+
+        except Exception as e:
+            app.logger.error(f"Error fetching portfolio details: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Internal error retrieving portfolio details",
                 "details": str(e)
             }), 500)
