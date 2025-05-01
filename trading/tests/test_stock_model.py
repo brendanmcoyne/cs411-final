@@ -6,20 +6,27 @@ from trading.models.stock_model import Stocks
 # --- Fixtures ---
 
 @pytest.fixture
-def song_beatles(session):
-    """Fixture for The Beatles - Hey Jude."""
-    song = Songs(artist="The Beatles", title="Hey Jude", year=1968, genre="Rock", duration=431)
-    session.add(song)
+def stock_apple(session):
+    """Fixture for Apple stock."""
+    stock = Stocks(
+        ticker="AAPL",
+        current_price=174.35
+    )
+    session.add(stock)
     session.commit()
-    return song
+    return stock
+
 
 @pytest.fixture
-def song_nirvana(session):
-    """Fixture for Nirvana - Smells Like Teen Spirit."""
-    song = Songs(artist="Nirvana", title="Smells Like Teen Spirit", year=1991, genre="Grunge", duration=301)
-    session.add(song)
+def stock_google(session):
+    """Fixture for Google stock."""
+    stock = Stocks(
+        ticker="GOOGL",
+        current_price=2805.67
+    )
+    session.add(stock)
     session.commit()
-    return song
+    return stock
 
 
 # --- Create Song ---
