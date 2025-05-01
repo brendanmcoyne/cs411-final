@@ -183,15 +183,15 @@ class Stocks(db.Model):
 
     @classmethod
     def lookup_stock_details(ticker: str) -> dict:
-    """
-    Looks up details for a given stock.
+        """
+        Looks up details for a given stock.
 
-    Args:
-        ticker (str): Stock ticker
+        Args:
+            ticker (str): Stock ticker
 
-    Returns:
-        dict: Stock details including price, history, and description
-    """
+        Returns:
+            dict: Stock details including price, history, and description
+        """
     try:
         ticker = ticker.upper()
 
@@ -228,7 +228,7 @@ class Stocks(db.Model):
         overview_data = overview_resp.json()
         description = overview_data.get("Description", "Description not available")
 
-        return {
+        {
             "ticker": ticker,
             "current_price": current_price,
             "description": description,
