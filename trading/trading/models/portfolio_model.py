@@ -159,22 +159,17 @@ class PortfolioModel:
         stock_symbol = self.validate_stock_ticker(stock_symbol, check_in_portfolio=False)
         shares = self.validate_shares_count(shares)
 
+        try:
+            stock = self._get_stock_from_cache_or_db(stock_symbol)
+            price_per_share = stock.update_stock()
+        except ValueError as e:
+            logger.error(f"Failed to add stock {stock_symbol}: {e}")
+            raise
+    
         if stock_symbol in self.portfolio:
             self.portfolio[stock_symbol] += shares
         else:
-            try:
-                stock = self._get_stock_from_cache_or_db(stock_symbol)
-            except ValueError as e:
-                logger.error(f"Failed to add stock {stock_symbol}: {e}")
-                raise
             self.portfolio[stock_symbol] = shares
-
-        # Get current market price
-        try:
-            price_per_share = stock.update_stock()
-        except ValueError as e:
-            logger.error(f"Failed to buy stock {stock_symbol}: {e}")
-            raise
 
         total_cost = price_per_share * shares
 
@@ -230,7 +225,6 @@ class PortfolioModel:
         except ValueError as e:
             logger.error(f"Failed to sell stock {stock_symbol}: {e}")
             raise
-        self.portfolio[stock_symbol] = shares
 
         total = price_per_share * shares
 
@@ -319,30 +313,6 @@ class PortfolioModel:
             
         return shares
 
-    def validate_track_number(self, track_number: int) -> int:
-        """
-        Validates the given track number, ensuring it is within the playlist's range.
-
-        Args:
-            track_number (int): The track number to validate.
-
-        Returns:
-            int: The validated track number.
-
-        Raises:
-            ValueError: If the track number is not a valid positive integer or is out of range.
-
-        """
-        try:
-            track_number = int(track_number)
-            if not (1 <= track_number <= self.get_playlist_length()):
-                raise ValueError(f"Invalid track number: {track_number}")
-        except ValueError as e:
-            logger.error(f"Invalid track number: {track_number}")
-            raise ValueError(f"Invalid track number: {track_number}") from e
-
-        return track_number
-
     def check_if_empty(self) -> None:
         """
         Checks if the portfolio is empty and raises a ValueError if it is.
@@ -354,3 +324,5 @@ class PortfolioModel:
         if not self.portfolio:
             logger.error("Portfolio is empty")
             raise ValueError("Portfolio is empty")
+        
+        

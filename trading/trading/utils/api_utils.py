@@ -1,12 +1,14 @@
 import os
 import requests
 import logging
+from trading.utils.logger import configure_logger
 
 BASE_URL = "https://alpha-vantage.p.rapidapi.com/query"
 API_HOST = "alpha-vantage.p.rapidapi.com"
 API_KEY = os.getenv("RAPIDAPI_KEY")  
 
 logger = logging.getLogger(__name__)
+configure_logger(logger)
 
 def get_current_price(cls, ticker: str) -> float:
     """Fetch the current stock price via RapidAPI.

@@ -28,3 +28,6 @@ def stock_google(session):
     session.commit()
     return stock
 
+
+
+

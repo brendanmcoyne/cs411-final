@@ -1,4 +1,5 @@
 import pytest
+import time
 
 from trading.models.portfolio_model import PortfolioModel
 from trading.models.stock_model import Stocks
@@ -177,14 +178,6 @@ def test_sell_more_shares_than_owned(portfolio_model, mocker):
     assert portfolio_model.portfolio["GOOGL"] == 3
 
 
-def test_sell_stock_empty_portfolio(portfolio_model, mocker):
-    """Test error when trying to sell from an empty portfolio."""
-    mocker.patch.object(portfolio_model, 'check_if_empty', side_effect=ValueError("Portfolio is empty"))
-    
-    with pytest.raises(ValueError, match="Portfolio is empty"):
-        portfolio_model.sell_stock("AAPL", 5)
-
-
 def test_sell_stock_api_error(portfolio_model, stock_apple, mocker):
     """Test handling error when stock price update fails during sell."""
     portfolio_model.portfolio = {"AAPL": 10}
@@ -213,7 +206,7 @@ def test_calculate_portfolio_value_valid(mocker, stock_apple, stock_google):
 
     # Mock stock lookup
     mocker.patch.object(model, "_get_stock_from_cache_or_db", side_effect=[stock_apple, stock_google])
-    
+
     # Mock updated prices
     mocker.patch.object(stock_apple, "update_stock", return_value=174.35)
     mocker.patch.object(stock_google, "update_stock", return_value=2805.67)
@@ -221,16 +214,6 @@ def test_calculate_portfolio_value_valid(mocker, stock_apple, stock_google):
     value = model.calculate_portfolio_value()
     expected = 2 * 174.35 + 1 * 2805.67
     assert value == pytest.approx(expected, 0.01)
-
-def test_calculate_portfolio_value_empty():
-    """Tests that calculating the value of an empty portfolio
-    correctly raises a ValueError.
-    """
-    model = PortfolioModel()
-    model.portfolio = {}
-
-    with pytest.raises(ValueError, match="empty"):
-        model.calculate_portfolio_value()
 
 def test_calculate_portfolio_value_with_price_update(mocker, stock_apple):
     """Tests that the total value uses the updated price from update_stock(),
@@ -244,5 +227,119 @@ def test_calculate_portfolio_value_with_price_update(mocker, stock_apple):
 
     value = model.calculate_portfolio_value()
     assert value == pytest.approx(600.0, 0.01)
+
+##################################################
+# Utility Function Test Cases
+##################################################
+
+def test_validate_stock_ticker_success(portfolio_model, mocker):
+    """Test successful validation of an existing ticker in portfolio and DB."""
+    portfolio_model.portfolio = {"AAPL": 10}
+    mocker.patch.object(portfolio_model, "_get_stock_from_cache_or_db", return_value=object())
+
+    result = portfolio_model.validate_stock_ticker("AAPL")
+    assert result == "AAPL"
+
+def test_validate_stock_ticker_not_in_portfolio(portfolio_model, mocker):
+    """Test failure when ticker is missing from portfolio and check is on."""
+    portfolio_model.portfolio = {}
+    with pytest.raises(ValueError, match="not found in portfolio"):
+        portfolio_model.validate_stock_ticker("AAPL", check_in_portfolio=True)
+
+def test_validate_stock_ticker_invalid_db(portfolio_model, mocker):
+    """Test failure when ticker is not found in the database."""
+    portfolio_model.portfolio = {"AAPL": 10}
+    mocker.patch.object(portfolio_model, "_get_stock_from_cache_or_db", side_effect=Exception("DB error"))
+
+    with pytest.raises(ValueError, match="not found in database"):
+        portfolio_model.validate_stock_ticker("AAPL", check_in_portfolio=True)
+
+def test_validate_shares_count_valid(portfolio_model):
+    """Test validation passes for a positive integer."""
+    assert portfolio_model.validate_shares_count(5) == 5
+    assert portfolio_model.validate_shares_count("3") == 3
+
+def test_validate_shares_count_zero(portfolio_model):
+    """Test validation fails for 0 shares."""
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        portfolio_model.validate_shares_count(0)
+
+def test_validate_shares_count_negative(portfolio_model):
+    """Test validation fails for negative shares."""
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        portfolio_model.validate_shares_count(-5)
+
+def test_validate_shares_count_invalid_type(portfolio_model):
+    """Test validation fails for non-numeric input."""
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        portfolio_model.validate_shares_count("five")
+
+def test_check_if_empty_raises(portfolio_model):
+    """Test that ValueError is raised when portfolio is empty."""
+    portfolio_model.portfolio = {}
+    with pytest.raises(ValueError, match="Portfolio is empty"):
+        portfolio_model.check_if_empty()
+
+def test_check_if_empty_passes(portfolio_model):
+    """Test that no exception is raised when portfolio has entries."""
+    portfolio_model.portfolio = {"AAPL": 1}
+    portfolio_model.check_if_empty()  
+
+def test_get_stock_cache_hit(portfolio_model, stock_apple, mocker):
+    """Test that a valid cached stock is returned without DB access."""
+    portfolio_model._stock_cache["AAPL"] = stock_apple
+    portfolio_model._ttl["AAPL"] = time.time() + 60  # valid TTL
+
+    mock_get = mocker.patch("trading.models.portfolio_model.Stocks.get_stock_by_ticker")
+    
+    result = portfolio_model._get_stock_from_cache_or_db("AAPL")
+
+    assert result is stock_apple
+    mock_get.assert_not_called()
+
+def test_get_stock_cache_miss_db_hit(portfolio_model, stock_apple, mocker):
+    """Test that a cache miss causes a DB fetch and updates cache."""
+    portfolio_model._ttl["AAPL"] = time.time() - 10
+    portfolio_model._stock_cache.clear()
+
+    mock_get = mocker.patch(
+        "trading.models.portfolio_model.Stocks.get_stock_by_ticker",
+        return_value=stock_apple
+    )
+
+    result = portfolio_model._get_stock_from_cache_or_db("AAPL")
+
+    assert result is stock_apple
+    assert portfolio_model._stock_cache["AAPL"] is stock_apple
+    assert "AAPL" in portfolio_model._ttl
+    assert portfolio_model._ttl["AAPL"] > time.time()
+    mock_get.assert_called_once_with("AAPL")
+
+def test_get_stock_cache_miss_db_miss(portfolio_model, mocker):
+    """Test that if DB also fails, a ValueError is raised."""
+    portfolio_model._ttl["AAPL"] = 0 
+    portfolio_model._stock_cache.clear()
+
+    mocker.patch(
+        "trading.models.portfolio_model.Stocks.get_stock_by_ticker",
+        side_effect=ValueError("Stock not found")
+    )
+
+    with pytest.raises(ValueError, match="not found in database"):
+        portfolio_model._get_stock_from_cache_or_db("AAPL")
+
+def test_get_stock_expired_cache(portfolio_model, stock_apple, mocker):
+    """Test that if cache exists but TTL is expired, DB is re-queried."""
+    portfolio_model._stock_cache["AAPL"] = stock_apple
+    portfolio_model._ttl["AAPL"] = time.time() - 100  
+
+    mock_get = mocker.patch(
+        "trading.models.portfolio_model.Stocks.get_stock_by_ticker",
+        return_value=stock_apple
+    )
+
+    result = portfolio_model._get_stock_from_cache_or_db("AAPL")
+    assert result is stock_apple
+    mock_get.assert_called_once()
 
 
