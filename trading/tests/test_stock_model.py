@@ -1,6 +1,6 @@
 import pytest
 
-from playlist.models.song_model import Songs
+from trading.models.stock_model import Stocks
 
 
 # --- Fixtures ---

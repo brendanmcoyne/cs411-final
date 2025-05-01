@@ -1,7 +1,7 @@
 import pytest
 
-from playlist.models.playlist_model import PlaylistModel
-from playlist.models.song_model import Songs
+from trading.models.portfolio_model import PortfolioModel
+from trading.models.stock_model import Stocks
 
 
 @pytest.fixture()
