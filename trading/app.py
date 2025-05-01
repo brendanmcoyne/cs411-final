@@ -387,6 +387,134 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "details": str(e)
             }), 500)
 
+    @app.route('/api/portfolio/buy', methods=['POST'])
+    @login_required
+    def buy_stock() -> Response:
+        """Buy stock for the current user's portfolio.
+        
+        Expected JSON Input:
+            - ticker (str): The stock ticker symbol
+            - shares (float/int): Number of shares to buy
+            
+        Returns:
+            JSON response with transaction details or error message
+            
+        Raises:
+            400 error if ticker or shares are missing or invalid
+            500 error if there is an unexpected error during the transaction
+        """
+        try:
+            app.logger.info("Received request to buy stock")
+            data = request.get_json()
+            ticker = data.get("ticker", "").strip().upper()
+            shares = data.get("shares")
+            
+            if not ticker or not shares:
+                app.logger.warning("Missing ticker or shares in buy request")
+                return make_response(jsonify({
+                    "status": "error",
+                    "message": "Stock ticker and shares are required"
+                }), 400)
+                
+            try:
+                shares = float(shares)
+            except (ValueError, TypeError):
+                return make_response(jsonify({
+                    "status": "error",
+                    "message": "Shares must be a valid number"
+                }), 400)
+                
+            transaction = portfolio_model.buy_stock(
+                current_user.username,
+                ticker,
+                shares
+            )
+            
+            app.logger.info(f"Successfully bought {shares} shares of {ticker}")
+            return make_response(jsonify({
+                "status": "success",
+                "transaction": transaction
+            }), 200)
+            
+        except ValueError as ve:
+            app.logger.warning(f"Buy transaction failed: {ve}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(ve)
+            }), 400)
+            
+        except Exception as e:
+            app.logger.error(f"Unexpected error during buy transaction: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "An internal error occurred while buying stock",
+                "details": str(e)
+            }), 500)
+
+    @app.route('/api/portfolio/sell', methods=['POST'])
+    @login_required
+    def sell_stock() -> Response:
+        """Sell stock from the current user's portfolio.
+        
+        Expected JSON Input:
+            - ticker (str): The stock ticker symbol
+            - shares (float/int): Number of shares to sell
+            
+        Returns:
+            JSON response with transaction details or error message
+            
+        Raises:
+            400 error if ticker or shares are missing or if user doesn't own enough shares
+            500 error if there is an unexpected error during the transaction
+        """
+        try:
+            app.logger.info("Received request to sell stock")
+            data = request.get_json()
+            ticker = data.get("ticker", "").strip().upper()
+            shares = data.get("shares")
+            
+            if not ticker or not shares:
+                app.logger.warning("Missing ticker or shares in sell request")
+                return make_response(jsonify({
+                    "status": "error",
+                    "message": "Stock ticker and shares are required"
+                }), 400)
+                
+            try:
+                shares = float(shares)
+            except (ValueError, TypeError):
+                return make_response(jsonify({
+                    "status": "error",
+                    "message": "Shares must be a valid number"
+                }), 400)
+                
+            transaction = portfolio_model.sell_stock(
+                current_user.username,
+                ticker,
+                shares
+            )
+            
+            app.logger.info(f"Successfully sold {shares} shares of {ticker}")
+            return make_response(jsonify({
+                "status": "success",
+                "transaction": transaction
+            }), 200)
+            
+        except ValueError as ve:
+            app.logger.warning(f"Sell transaction failed: {ve}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(ve)
+            }), 400)
+            
+        except Exception as e:
+            app.logger.error(f"Unexpected error during sell transaction: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "An internal error occurred while selling stock",
+                "details": str(e)
+            }), 500)
+
 
     @app.route('/api/reset-songs', methods=['DELETE'])
     def reset_songs() -> Response:
