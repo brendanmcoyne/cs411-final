@@ -324,5 +324,7 @@ class PortfolioModel:
         if not self.portfolio:
             logger.error("Portfolio is empty")
             raise ValueError("Portfolio is empty")
+
+
         
         

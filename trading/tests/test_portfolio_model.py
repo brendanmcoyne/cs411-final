@@ -342,4 +342,47 @@ def test_get_stock_expired_cache(portfolio_model, stock_apple, mocker):
     assert result is stock_apple
     mock_get.assert_called_once()
 
+##################################################
+# Get User Portfolio Test Cases
+##################################################
+
+def test_get_user_portfolio_valid(portfolio_model, stock_apple, stock_google, mocker):
+    """Test that get_user_portfolio returns correct summary with valid data."""
+    portfolio_model.portfolio = {"AAPL": 3, "GOOGL": 2}
+
+    # Mock methods
+    mocker.patch.object(portfolio_model, "check_if_empty")
+    mocker.patch.object(portfolio_model, "calculate_portfolio_value", return_value=10000.0)
+
+    mocker.patch.object(portfolio_model, "_get_stock_from_cache_or_db", side_effect=[stock_apple, stock_google])
+    mocker.patch.object(stock_apple, "update_stock", return_value=174.35)
+    mocker.patch.object(stock_google, "update_stock", return_value=2805.67)
+
+    stock_apple.current_price = 174.35
+    stock_google.current_price = 2805.67
+
+    result = portfolio_model.get_user_portfolio(user_id=1)
+
+    assert result["total_value"] == 10000.0
+    assert len(result["holdings"]) == 2
+
+    aapl = next(item for item in result["holdings"] if item["ticker"] == "AAPL")
+    googl = next(item for item in result["holdings"] if item["ticker"] == "GOOGL")
+
+    assert aapl["quantity"] == 3
+    assert aapl["current_price"] == 174.35
+    assert aapl["total_value"] == 3 * 174.35
+
+    assert googl["quantity"] == 2
+    assert googl["current_price"] == 2805.67
+    assert googl["total_value"] == 2 * 2805.67
+
+def test_get_user_portfolio_empty_error(portfolio_model, mocker):
+    """Test get_user_portfolio raises error when portfolio is empty."""
+    portfolio_model.portfolio = {}
+
+    mocker.patch.object(portfolio_model, "check_if_empty", side_effect=ValueError("Portfolio is empty"))
+
+    with pytest.raises(ValueError, match="Portfolio is empty"):
+        portfolio_model.get_user_portfolio(user_id=1)
 

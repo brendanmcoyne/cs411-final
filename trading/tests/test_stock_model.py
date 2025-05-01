@@ -137,6 +137,55 @@ def test_delete_stock_db_failure(session, stock_apple, mocker):
 
     rollback_mock.assert_called_once()
 
+def test_lookup_stock_details_apple_success(mocker):
+    """Test successful lookup of Apple stock details."""
+    mock_details = {
+        "ticker": "AAPL",
+        "name": "Apple Inc.",
+        "exchange": "NASDAQ",
+        "industry": "Technology",
+        "price": 174.35
+    }
+    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=mock_details)
 
+    result = Stocks.lookup_stock_details("AAPL")
+
+    assert result["ticker"] == "AAPL"
+    assert result["name"] == "Apple Inc."
+    assert result["price"] == 174.35
+
+
+def test_lookup_stock_details_google_success(mocker):
+    """Test successful lookup of Google stock details."""
+    mock_details = {
+        "ticker": "GOOGL",
+        "name": "Alphabet Inc.",
+        "exchange": "NASDAQ",
+        "industry": "Technology",
+        "price": 2805.67
+    }
+    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=mock_details)
+
+    result = Stocks.lookup_stock_details("GOOGL")
+
+    assert result["ticker"] == "GOOGL"
+    assert result["name"] == "Alphabet Inc."
+    assert result["price"] == 2805.67
+
+
+def test_lookup_stock_details_not_found(mocker):
+    """Test lookup fails with invalid ticker."""
+    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=None)
+
+    with pytest.raises(ValueError, match="not found"):
+        Stocks.lookup_stock_details("INVALID")
+
+
+def test_lookup_stock_details_exception(mocker):
+    """Test lookup raises on unexpected error."""
+    mocker.patch("trading.models.stock_model.fetch_stock_details", side_effect=Exception("API error"))
+
+    with pytest.raises(Exception, match="API error"):
+        Stocks.lookup_stock_details("AAPL")
 
 
