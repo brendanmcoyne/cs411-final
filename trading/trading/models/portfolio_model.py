@@ -35,65 +35,6 @@ class PortfolioModel:
     # Stock Management Functions
     ##################################################
 
-    def add_stock_to_portfolio(self, ticker: str, quantity: int) -> None:
-        """
-        Adds quantity number of a stock to the portfolio by ticker, using the cache or database lookup.
-
-        Args:
-            ticker (string): The ticker of the stock to add to the portfolio.
-            quantity (int): The number of shares of stock ticker to add to the portfolio
-
-        Raises:
-            ValueError: If the ticker is invalid.
-        """
-
-        logger.info(f"Received request to add {quantity} shares of stocke {ticker} to the portfolio")
-
-        ticker = self.validate_stock_ticker(ticker, check_in_portfolio=False)
-
-        if ticker in self.portfolio:
-            self.portfolio[ticker] += quantity
-        else:
-            try:
-                stock = self._get_stock_from_cache_or_db(stock)
-            except ValueError as e:
-                logger.error(f"Failed to add stock: {e}")
-                raise
-            self.portfolio[ticker] = quantity
-
-        logger.info(f"Successfully added to portfolio: {ticker} - {quantity} shares")
-
-    def remove_stock_from_portfolio(self, ticker: str, quantity: int) -> None:
-        """Removes quantity of stock ticker from the portolio by its ticker.
-
-        Args:
-            ticker (str): The ticker of the stock to remove from the portfolio.
-            quantity (int): The number of shares of stock to remove.
-
-        Raises:
-            ValueError: If the ticker is invalid, if stock is not in portfolio, or 
-                there is less than quantity shares of stock in portfolio
-
-        """
-        logger.info(f"Received request to remove {quantity} shares of stock {ticker}")
-
-        self.check_if_empty()
-        ticker = self.validate_stock_ticker(ticker)
-
-        if ticker not in self.portfolio:
-            logger.warning(f"Stock {ticker} not found in the portfolio")
-            raise ValueError(f"Stock {ticker} not found in the portfolio")
-
-        if self.portfolio[ticker] < quantity:
-            logger.warning(f"Tried to remove {quantity} shares of Stock {ticker} from portfolio but only found {self.portfolio[ticker]}")
-            raise ValueError(f"Tried to remove {quantity} shares of Stock {ticker} from portfolio but only found {self.portfolio[ticker]}")
-        elif self.portfolio[ticker] == quantity:
-            del(self.portfolio[ticker])
-        else:
-            self.portfolio[ticker] -= quantity
-        
-        logger.info(f"Successfully removed {quantity} shares of stock {ticker} from the portfolio")
-
     def calculate_portfolio_value(self) -> float:
         """Calculates the full value of the user's portfolio
         
@@ -101,8 +42,7 @@ class PortfolioModel:
             float: the full value of the user's portfolio in USD
 
         Raises:
-            ValueError: If the portfolio is empty
-            500 error: If there is an issue retrieving current price
+            ValueError: If the portfolio is empty or there is an issue finding the stock in the database
         """
         logger.info("Reveived request to calculate portfolio value")
         self.check_if_empty()
@@ -111,14 +51,16 @@ class PortfolioModel:
         for ticker, quantity in self.portfolio.items():
             try:
                 logger.info(f"Fetching price for {ticker}")
-                price = get_current_price(ticker)
+                stock = self._get_stock_from_cache_or_db(stock)
+                price = stock.update_stock()
                 subtotal = price * quantity
                 total += subtotal
-                logger.info(f"{quantity} shares of {ticker} at ${price} each: ${subtotal}")
-            except Exception as e:
-                logger.warning(f"Failed to get price for {ticker}: {e}")
+                logger.info(f"{quantity} shares of {ticker} at ${price:.2f} each: ${subtotal:.2f}")
+            except ValueError as e:
+                logger.error(f"Failed to find price for stock {ticker}: {e}")
+                raise
 
-        logger.info(f"Successfully computed total portfolio value: ${total}")
+        logger.info(f"Successfully computed total portfolio value: ${total:.2f}")
         return total
 
 
@@ -155,82 +97,46 @@ class PortfolioModel:
         self._ttl[ticker] = now + self.ttl_seconds
         return stock
 
-    def get_user_portfolio(user_id: int) -> dict:
-    """
-    Retrieves and summarizes the user's portfolio.
+    def get_user_portfolio(self, user_id: int) -> dict:
+        """
+        Retrieves and summarizes the user's portfolio.
 
-    Args:
-        user_id (int): ID of the user
+        Args:
+            user_id (int): ID of the user
 
-    Returns:
-        dict: Portfolio summary
-    """
-    try:
-        holdings = Portfolio.query.filter_by(user_id=user_id).all()
-        if not holdings:
-            return {"message": "No holdings found", "total_value": 0, "holdings": []}
+        Returns:
+            dict: Portfolio summary
+        """
+        try:
+            self.check_if_empty()
 
-        result = []
-        total_value = 0
+            result = []
+            total_value = self.calculate_portfolio_value()
 
-        for holding in holdings:
-            stock = holding.stock
-            holding_value = holding.quantity * stock.current_price
-            total_value += holding_value
+            for ticker, quantity in self.portfolio.item():
+                stock = self._get_stock_from_cache_or_db(ticker)
+                holding_value = quantity * stock.update_stock()
 
-            result.append({
-                "ticker": stock.ticker,
-                "quantity": holding.quantity,
-                "current_price": stock.current_price,
-                "total_value": holding_value
-            })
+                result.append({
+                    "ticker": stock.ticker,
+                    "quantity": quantity,
+                    "current_price": stock.current_price,
+                    "total_value": holding_value
+                })
 
-        return {
-            "total_value": round(total_value, 2),
-            "holdings": result
-        }
+            return {
+                "total_value": round(total_value, 2),
+                "holdings": result
+            }
 
-    except SQLAlchemyError as e:
-        logger.error(f"Error retrieving portfolio: {e}")
-        raise
+        except SQLAlchemyError as e:
+            logger.error(f"Error retrieving portfolio: {e}")
+            raise
     
     ##################################################
     # Stock Management Functions
     ##################################################
 
-    def _get_stock_price_from_cache_or_market(self, stock_symbol: str) -> float:
-        """
-        Retrieves the current price of a stock, using the internal cache if possible.
-
-        This method checks whether a cached price is available and still valid.
-        If not, it queries the market API, updates the cache, and returns the price.
-
-        Args:
-            stock_symbol (str): The symbol of the stock to get the price for.
-
-        Returns:
-            float: The current market price of the stock.
-
-        Raises:
-            ValueError: If the stock symbol is invalid or market data cannot be retrieved.
-        """
-        now = time.time()
-        stock_symbol = stock_symbol.upper() 
-
-        if stock_symbol in self._price_cache and self._ttl.get(stock_symbol, 0) > now:
-            logger.debug(f"Stock price for {stock_symbol} retrieved from cache")
-            return self._price_cache[stock_symbol]
-
-        try:
-            price = get_current_price(stock_symbol)
-            logger.info(f"Stock price for {stock_symbol}: ${price:.2f}")
-        except Exception as e:
-            logger.error(f"Failed to retrieve market price for {stock_symbol}: {e}")
-            raise ValueError(f"Could not retrieve market price for {stock_symbol}") from e
-
-        self._price_cache[stock_symbol] = price
-        self._ttl[stock_symbol] = now + self.ttl_seconds
-        return price
 
     def buy_stock(self, stock_symbol: str, shares: int) -> dict:
         """
@@ -249,23 +155,27 @@ class PortfolioModel:
         """
         logger.info(f"Attempting to buy {shares} shares of {stock_symbol}")
 
-        stock_symbol = self.validate_stock_ticker(stock_symbol)
+        stock_symbol = self.validate_stock_ticker(stock_symbol, check_in_portfolio=False)
         shares = self.validate_shares_count(shares)
 
-        # Get current market price
-        try:
-            price_per_share = self._get_stock_price_from_cache_or_market(stock_symbol)
-        except ValueError as e:
-            logger.error(f"Failed to buy stock: {e}")
-            raise
-
-        total_cost = price_per_share * shares
-
-        # Update portfolio 
         if stock_symbol in self.portfolio:
             self.portfolio[stock_symbol] += shares
         else:
+            try:
+                stock = self._get_stock_from_cache_or_db(stock)
+            except ValueError as e:
+                logger.error(f"Failed to add stock {stock_symbol}: {e}")
+                raise
             self.portfolio[stock_symbol] = shares
+
+        # Get current market price
+        try:
+            price_per_share = stock.update_stock()
+        except ValueError as e:
+            logger.error(f"Failed to buy stock {stock_symbol}: {e}")
+            raise
+
+        total_cost = price_per_share * shares
 
         transaction_details = {
             "transaction_type": "BUY",
@@ -311,13 +221,15 @@ class PortfolioModel:
         if self.portfolio[stock_symbol] < shares:
             logger.error(f"Insufficient shares of {stock_symbol} in portfolio")
             raise ValueError(f"You only have {self.portfolio[stock_symbol]} shares of {stock_symbol}, but attempted to sell {shares}")
-
+        
         # Get current price
         try:
-            price_per_share = self._get_stock_price_from_cache_or_market(stock_symbol)
+            stock = self._get_stock_from_cache_or_db(stock)
+            price_per_share = stock.update_stock()
         except ValueError as e:
-            logger.error(f"Failed to sell stock: {e}")
+            logger.error(f"Failed to sell stock {stock_symbol}: {e}")
             raise
+        self.portfolio[stock_symbol] = shares
 
         total = price_per_share * shares
 
