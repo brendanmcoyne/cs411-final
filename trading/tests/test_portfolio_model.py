@@ -5,43 +5,38 @@ from trading.models.stock_model import Stocks
 
 
 @pytest.fixture()
-def playlist_model():
-    """Fixture to provide a new instance of PlaylistModel for each test."""
-    return PlaylistModel()
+def portfolio_model():
+    """Fixture to provide a new instance of PortfolioModel for each test."""
+    return PortfolioModel()
 
-"""Fixtures providing sample songs for the tests."""
+"""Fixtures providing sample stocks for the tests."""
 @pytest.fixture
-def song_beatles(session):
-    """Fixture for a Beatles song."""
-    song = Songs(
-        artist="The Beatles",
-        title="Come Together",
-        year=1969,
-        genre="Rock",
-        duration=259
+def stock_apple(session):
+    """Fixture for Apple stock."""
+    stock = Stocks(
+        ticker="AAPL",
+        current_price=174.35
     )
-    session.add(song)
+    session.add(stock)
     session.commit()
-    return song
+    return stock
+
 
 @pytest.fixture
-def song_nirvana(session):
-    """Fixture for a Nirvana song."""
-    song = Songs(
-        artist="Nirvana",
-        title="Smells Like Teen Spirit",
-        year=1991,
-        genre="Grunge",
-        duration=301
+def stock_google(session):
+    """Fixture for Google stock."""
+    stock = Stocks(
+        ticker="GOOGL",
+        current_price=2805.67
     )
-    session.add(song)
+    session.add(stock)
     session.commit()
-    return song
+    return stock
 
 @pytest.fixture
-def sample_playlist(song_beatles, song_nirvana):
-    """Fixture for a sample playlist."""
-    return [song_beatles, song_nirvana]
+def sample_portfolio(stock_apple, stock_google):
+    """Fixture for a sample portfolio."""
+    return [stock_apple, stock_google]
 
 ##################################################
 # Add / Remove Song Management Test Cases
