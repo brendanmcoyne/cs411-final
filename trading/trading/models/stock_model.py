@@ -180,6 +180,66 @@ class Stocks(db.Model):
             logger.error(f"Database error while retrieving stock {ticker}: {e}")
             raise
 
+
+    @classmethod
+    def lookup_stock_details(ticker: str) -> dict:
+    """
+    Looks up details for a given stock.
+
+    Args:
+        ticker (str): Stock ticker
+
+    Returns:
+        dict: Stock details including price, history, and description
+    """
+    try:
+        ticker = ticker.upper()
+
+        # Current price
+        current_price = get_current_price(ticker)
+
+        # Historical data (sample using Alpha Vantage)
+        hist_url = f"https://www.alphavantage.co/query"
+        params = {
+            "function": "TIME_SERIES_DAILY_ADJUSTED",
+            "symbol": ticker,
+            "apikey": ALPHA_VANTAGE_API_KEY,
+            "outputsize": "compact"
+        }
+        response = requests.get(hist_url, params=params)
+        data = response.json()
+
+        if "Time Series (Daily)" not in data:
+            raise ValueError(f"No historical data found for {ticker}")
+
+        historical_prices = [
+            {"date": date, "close": float(info["4. close"])}
+            for date, info in sorted(data["Time Series (Daily)"].items(), reverse=True)[:30]
+        ]
+
+        # Description (sample using Alpha Vantage company overview)
+        overview_url = f"https://www.alphavantage.co/query"
+        params = {
+            "function": "OVERVIEW",
+            "symbol": ticker,
+            "apikey": ALPHA_VANTAGE_API_KEY
+        }
+        overview_resp = requests.get(overview_url, params=params)
+        overview_data = overview_resp.json()
+        description = overview_data.get("Description", "Description not available")
+
+        return {
+            "ticker": ticker,
+            "current_price": current_price,
+            "description": description,
+            "historical_prices": historical_prices
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to look up stock details for {ticker}: {e}")
+        raise
+
+
     @classmethod
     def get_song_by_compound_key(cls, artist: str, title: str, year: int) -> "Songs":
         """

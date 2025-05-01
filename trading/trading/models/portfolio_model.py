@@ -154,6 +154,45 @@ class PortfolioModel:
         self._stock_cache[ticker] = stock
         self._ttl[ticker] = now + self.ttl_seconds
         return stock
+
+    def get_user_portfolio(user_id: int) -> dict:
+    """
+    Retrieves and summarizes the user's portfolio.
+
+    Args:
+        user_id (int): ID of the user
+
+    Returns:
+        dict: Portfolio summary
+    """
+    try:
+        holdings = Portfolio.query.filter_by(user_id=user_id).all()
+        if not holdings:
+            return {"message": "No holdings found", "total_value": 0, "holdings": []}
+
+        result = []
+        total_value = 0
+
+        for holding in holdings:
+            stock = holding.stock
+            holding_value = holding.quantity * stock.current_price
+            total_value += holding_value
+
+            result.append({
+                "ticker": stock.ticker,
+                "quantity": holding.quantity,
+                "current_price": stock.current_price,
+                "total_value": holding_value
+            })
+
+        return {
+            "total_value": round(total_value, 2),
+            "holdings": result
+        }
+
+    except SQLAlchemyError as e:
+        logger.error(f"Error retrieving portfolio: {e}")
+        raise
     
     ##################################################
     # Stock Management Functions
