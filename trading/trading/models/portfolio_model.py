@@ -26,6 +26,7 @@ class PortfolioModel:
         """
         self.portfolio: dict[str, int] = {}
         self._stock_cache: dict[int, Stocks] = {}
+        self._price_cache: dict[str, float] = {}
         self._ttl: dict[int, float] = {}
         self.ttl_seconds = int(os.getenv("TTL", 60))  # Default TTL is 60 seconds
 
@@ -153,6 +154,152 @@ class PortfolioModel:
         self._stock_cache[ticker] = stock
         self._ttl[ticker] = now + self.ttl_seconds
         return stock
+    
+    ##################################################
+    # Stock Management Functions
+    ##################################################
+
+    def _get_stock_price_from_cache_or_market(self, stock_symbol: str) -> float:
+        """
+        Retrieves the current price of a stock, using the internal cache if possible.
+
+        This method checks whether a cached price is available and still valid.
+        If not, it queries the market API, updates the cache, and returns the price.
+
+        Args:
+            stock_symbol (str): The symbol of the stock to get the price for.
+
+        Returns:
+            float: The current market price of the stock.
+
+        Raises:
+            ValueError: If the stock symbol is invalid or market data cannot be retrieved.
+        """
+        now = time.time()
+        stock_symbol = stock_symbol.upper() 
+
+        if stock_symbol in self._price_cache and self._ttl.get(stock_symbol, 0) > now:
+            logger.debug(f"Stock price for {stock_symbol} retrieved from cache")
+            return self._price_cache[stock_symbol]
+
+        try:
+            price = get_current_price(stock_symbol)
+            logger.info(f"Stock price for {stock_symbol}: ${price:.2f}")
+        except Exception as e:
+            logger.error(f"Failed to retrieve market price for {stock_symbol}: {e}")
+            raise ValueError(f"Could not retrieve market price for {stock_symbol}") from e
+
+        self._price_cache[stock_symbol] = price
+        self._ttl[stock_symbol] = now + self.ttl_seconds
+        return price
+
+    def buy_stock(self, stock_symbol: str, shares: int) -> dict:
+        """
+        Enables users to purchase shares of a specified stock.
+
+        Args:
+            stock_symbol (str): The symbol of the stock to buy.
+            shares (int): The number of shares to purchase.
+
+        Returns:
+            Dict: Transaction details including stock symbol, shares purchased, price per share,
+                  total cost, and timestamp.
+
+        Raises:
+            ValueError: If the stock symbol is invalid, shares value is invalid, or the transaction fails.
+        """
+        logger.info(f"Attempting to buy {shares} shares of {stock_symbol}")
+
+        stock_symbol = self.validate_stock_ticker(stock_symbol)
+        shares = self.validate_shares_count(shares)
+
+        # Get current market price
+        try:
+            price_per_share = self._get_stock_price_from_cache_or_market(stock_symbol)
+        except ValueError as e:
+            logger.error(f"Failed to buy stock: {e}")
+            raise
+
+        total_cost = price_per_share * shares
+
+        # Update portfolio 
+        if stock_symbol in self.portfolio:
+            self.portfolio[stock_symbol] += shares
+        else:
+            self.portfolio[stock_symbol] = shares
+
+        transaction_details = {
+            "transaction_type": "BUY",
+            "stock_symbol": stock_symbol,
+            "shares": shares,
+            "price_per_share": price_per_share,
+            "total_cost": total_cost,
+            "timestamp": time.time()
+        }
+
+        logger.info(f"Successfully bought {shares} shares of {stock_symbol} at ${price_per_share:.2f} per share")
+        return transaction_details
+
+    def sell_stock(self, stock_symbol: str, shares: int) -> dict:
+        """
+        Allows users to sell shares of a stock they currently hold.
+
+        Args:
+            stock_symbol (str): The symbol of the stock to sell.
+            shares (int): The number of shares to sell.
+
+        Returns:
+            Dict: Transaction details including stock symbol, shares sold, price per share,
+                  total proceeds, and timestamp.
+
+        Raises:
+            ValueError: If the stock symbol is invalid, shares value is invalid,
+                        the user doesn't own the stock, or owns insufficient shares.
+        """
+        logger.info(f"Attempting to sell {shares} shares of {stock_symbol}")
+
+        # Check if portfolio is empty
+        self.check_if_empty()
+        
+        stock_symbol = self.validate_stock_ticker(stock_symbol)
+        shares = self.validate_shares_count(shares)
+
+        # Check if the user owns this stock and has enough shares
+        if stock_symbol not in self.portfolio:
+            logger.error(f"Stock {stock_symbol} not found in portfolio")
+            raise ValueError(f"You don't own any shares of {stock_symbol}")
+
+        if self.portfolio[stock_symbol] < shares:
+            logger.error(f"Insufficient shares of {stock_symbol} in portfolio")
+            raise ValueError(f"You only have {self.portfolio[stock_symbol]} shares of {stock_symbol}, but attempted to sell {shares}")
+
+        # Get current price
+        try:
+            price_per_share = self._get_stock_price_from_cache_or_market(stock_symbol)
+        except ValueError as e:
+            logger.error(f"Failed to sell stock: {e}")
+            raise
+
+        total = price_per_share * shares
+
+        # Update portfolio
+        self.portfolio[stock_symbol] -= shares
+        
+        # Remove stock from portfolio if no shares left
+        if self.portfolio[stock_symbol] == 0:
+            del self.portfolio[stock_symbol]
+
+        transaction_details = {
+            "transaction_type": "SELL",
+            "stock_symbol": stock_symbol,
+            "shares": shares,
+            "price_per_share": price_per_share,
+            "total_proceeds": total,
+            "timestamp": time.time()
+        }
+
+        logger.info(f"Successfully sold {shares} shares of {stock_symbol} at ${price_per_share:.2f} per share")
+        return transaction_details
 
 
     
@@ -517,6 +664,29 @@ class PortfolioModel:
         
 
         return ticker
+    
+    def validate_shares_count(self, shares: int) -> int:
+        """
+        Validates that the number of shares is a positive integer.
+
+        Args:
+            shares: The number of shares to validate.
+
+        Returns:
+            int: The validated number of shares.
+
+        Raises:
+            ValueError: If the shares count is not a positive integer.
+        """
+        try:
+            shares = int(shares)
+            if shares <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            logger.error(f"Invalid number of shares: {shares}")
+            raise ValueError(f"Number of shares must be a positive integer: {shares}")
+            
+        return shares
 
     def validate_track_number(self, track_number: int) -> int:
         """
