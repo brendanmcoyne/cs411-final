@@ -757,93 +757,109 @@ def create_app(config_class=ProductionConfig) -> Flask:
     ############################################################
 
 
-    @app.route('/api/portfolio/add', methods=['POST'])
+    @app.route('/api/portfolio/buy', methods=['POST'])
     @login_required
-    def add_stock_to_portfolio() -> Response:
-        """Adds quantity shares of a stock ticker to the user's portfolio.
-
-            Expected JSON input:
-                ticker (str): the ticker of the company
-                quantity (int): the number of shares to buy
-
-            Returns:
-                JSON response indicating the success of the stock addition.
-
-            Raises:
-                500 error if there is an unexpected error
-                ValueError if there is an issue adding the stock
-        """
-        data = request.get_json()
-        ticker = data.get("ticker", "").strip().upper()
-        quantity = data.get("quantity")
-
-        if not ticker or not isinstance(quantity, int) or quantity <= 0:
-            return make_response(jsonify({
-                "status": "error",
-                "message": "Invalid input — must provide ticker and positive quantity"
-            }), 400)
-
-        try:
-            portfolio_model.add_stock_to_portfolio(ticker, quantity)
-            return make_response(jsonify({
-                "status": "success",
-                "message": f"Added {quantity} shares of {ticker} to portfolio"
-            }), 200)
-        except ValueError as e:
-            return make_response(jsonify({
-                "status": "error",
-                "message": str(e)
-            }), 400)
-        except Exception as e:
-            app.logger.error(f"Unexpected error: {e}")
-            return make_response(jsonify({
-                "status": "error",
-                "message": "Internal server error"
-            }), 500)
-        
-    @app.route('/api/portfolio/remove', methods=['POST'])
-    @login_required
-    def remove_stock_from_portfolio() -> Response:
-        """Removes quantity shares of a stock ticker from the user's portfolio.
+    def buy_stock() -> Response:
+        """Buys shares of a specified stock and adds them to the user's portfolio.
 
         Expected JSON input:
-                ticker (str): the ticker of the company
-                quantity (int): the number of shares to sell
+            ticker (str): The ticker symbol of the company to buy.
+            shares (int): The number of shares to purchase.
 
-            Returns:
-                JSON response indicating the success of the stock sale.
+        Returns:
+            JSON response containing transaction details if the purchase succeeds.
 
-            Raises:
-                500 error if there is an unexpected error
-                ValueError if there is an issue removing the stock
+        Raises:
+            400 error if the input is invalid or the purchase fails due to validation.
+            500 error if there is an unexpected server-side issue.
         """
         data = request.get_json()
         ticker = data.get("ticker", "").strip().upper()
-        quantity = data.get("quantity")
+        shares = data.get("shares")
 
-        if not ticker or not isinstance(quantity, int) or quantity <= 0:
+        app.logger.info(f"Received request to buy {shares} shares of {ticker}")
+
+        # Basic validation
+        if not ticker or not isinstance(shares, int) or shares <= 0:
+            app.logger.warning("Invalid input: ticker must be string, shares must be positive int")
             return make_response(jsonify({
                 "status": "error",
-                "message": "Invalid input — must provide ticker and positive quantity"
+                "message": "Invalid input: must provide valid 'ticker' and positive integer 'shares'"
             }), 400)
 
         try:
-            portfolio_model.remove_stock_from_portfolio(ticker, quantity)
+            result = portfolio_model.buy_stock(ticker, shares)
             return make_response(jsonify({
                 "status": "success",
-                "message": f"Removed {quantity} shares of {ticker} from portfolio"
+                "message": f"Successfully bought {shares} shares of {ticker}",
+                "transaction": result
             }), 200)
+
         except ValueError as e:
+            app.logger.warning(f"Buy failed: {e}")
             return make_response(jsonify({
                 "status": "error",
                 "message": str(e)
             }), 400)
+
         except Exception as e:
-            app.logger.error(f"Unexpected error: {e}")
+            app.logger.error(f"Unexpected error during stock purchase: {e}", exc_info=True)
             return make_response(jsonify({
                 "status": "error",
-                "message": "Internal server error"
+                "message": "Unexpected server error during stock purchase"
             }), 500)
+        
+    @app.route('/api/portfolio/sell', methods=['POST'])
+    @login_required
+    def sell_stock_route() -> Response:
+        """Sells shares of a specified stock from the user's portfolio.
+
+            Expected JSON input:
+                ticker (str): The ticker symbol of the company to sell.
+                shares (int): The number of shares to sell.
+
+            Returns:
+                JSON response containing transaction details if the sale succeeds.
+
+            Raises:
+                400 error if the input is invalid or the user does not own the stock or has insufficient shares.
+                500 error if there is an unexpected server-side issue.
+        """
+        data = request.get_json()
+        ticker = data.get("ticker", "").strip().upper()
+        shares = data.get("shares")
+
+        app.logger.info(f"Received request to sell {shares} shares of {ticker}")
+
+        if not ticker or not isinstance(shares, int) or shares <= 0:
+            app.logger.warning("Invalid input: ticker must be string, shares must be positive int")
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Invalid input: must provide valid 'ticker' and positive integer 'shares'"
+            }), 400)
+
+        try:
+            result = portfolio_model.sell_stock(ticker, shares)
+            return make_response(jsonify({
+                "status": "success",
+                "message": f"Successfully sold {shares} shares of {ticker}",
+                "transaction": result
+            }), 200)
+
+        except ValueError as e:
+            app.logger.warning(f"Sell failed: {e}")
+            return make_response(jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 400)
+
+        except Exception as e:
+            app.logger.error(f"Unexpected error during stock sale: {e}", exc_info=True)
+            return make_response(jsonify({
+                "status": "error",
+                "message": "Unexpected server error during stock sale"
+            }), 500)
+
 
     @app.route('/api/clear-playlist', methods=['POST'])
     @login_required
