@@ -67,7 +67,6 @@ class Stocks(db.Model):
             raise
 
         try:
-            # Check if stock with same ticker already exists
             existing = Stocks.query.filter_by(ticker=ticker.strip().upper()).first()
             if existing:
                 logger.error(f"Stock already exists: {ticker}")
@@ -102,7 +101,7 @@ class Stocks(db.Model):
         logger.info(f"Received request to delete stock with ID {stock_id}")
 
         try:
-            stock = cls.query.get(stock_id)
+            stock = db.session.get(cls, stock_id)
             if not stock:
                 logger.warning(f"Attempted to delete non-existent stock with ID {stock_id}")
                 raise ValueError(f"Stock with ID {stock_id} not found")
