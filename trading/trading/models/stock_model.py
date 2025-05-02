@@ -53,37 +53,25 @@ class Stocks(db.Model):
             SQLAlchemyError: For database-related issues.
         """
         logger.info(f"Received request to create stock: {ticker}")
-        if not is_valid_ticker(ticker):
-            logger.warning(f"Invalid ticker symbol: {ticker}")
-            raise ValueError(f"Ticker '{ticker}' is not a valid stock symbol.")
-        try:
-            stock = Stocks(
-                ticker=ticker.strip().upper(),
-                current_price=get_current_price(ticker)
-            )
-            stock.validate()
-        except ValueError as e:
-            logger.warning(f"Validation failed: {e}")
-            raise
 
-        try:
-            existing = Stocks.query.filter_by(ticker=ticker.strip().upper()).first()
-            if existing:
-                logger.error(f"Stock already exists: {ticker}")
-                raise ValueError(f"Stock with ticker '{ticker}' already exists.")
+        if not ticker or not isinstance(ticker, str):
+            raise ValueError("Invalid ticker")
 
-            db.session.add(stock)
-            db.session.commit()
-            logger.info(f"Stock successfully added: {ticker}")
+        if not isinstance(current_price, (int, float)) or current_price <= 0:
+            raise ValueError("Current price must be a positive number")
 
-        except IntegrityError:
-            logger.error(f"Stock already exists: {ticker}")
-            db.session.rollback()
+        existing = cls.query.filter_by(ticker=ticker.upper()).first()
+        if existing:
             raise ValueError(f"Stock with ticker '{ticker}' already exists.")
 
-        except SQLAlchemyError as e:
-            logger.error(f"Database error while creating stock: {e}")
+        stock = cls(ticker=ticker.upper(), current_price=current_price)
+
+        try:
+            db.session.add(stock)
+            db.session.commit()
+        except Exception as e:
             db.session.rollback()
+            logger.error(f"Error saving stock: {e}")
             raise
 
     @classmethod

@@ -319,6 +319,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
         try:
             data = request.get_json()
             ticker = data.get("ticker", "").strip().upper()
+            current_price = data.get("current_price")
 
             if not ticker or not isinstance(ticker, str):
                 app.logger.warning("Missing or invalid ticker in request")
@@ -327,7 +328,11 @@ def create_app(config_class=ProductionConfig) -> Flask:
                     "message": "Missing or invalid 'ticker' in request body"
                 }), 400)
 
-            Stocks.create_stock(ticker=ticker)
+            # Only fetch price from API if not explicitly passed (i.e., real stocks)
+            if current_price is None:
+                current_price = get_current_price(ticker)
+
+            Stocks.create_stock(ticker=ticker, current_price=current_price)
 
             app.logger.info(f"Stock '{ticker}' successfully added")
             return make_response(jsonify({
@@ -426,7 +431,6 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 }), 400)
                 
             transaction = portfolio_model.buy_stock(
-                current_user.username,
                 ticker,
                 shares
             )
@@ -490,7 +494,6 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 }), 400)
                 
             transaction = portfolio_model.sell_stock(
-                current_user.username,
                 ticker,
                 shares
             )
@@ -621,3 +624,11 @@ def create_app(config_class=ProductionConfig) -> Flask:
             }), 500)
         
     return app
+
+if __name__ == '__main__':
+    app = create_app() 
+    app.logger.info("Starting Flask app...")
+    try:
+        app.run(debug=True, host='0.0.0.0', port=5000)
+    except Exception as e:
+        app.logger.error(f"Error while running app: {e}")

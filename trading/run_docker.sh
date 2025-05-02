@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables
-IMAGE_NAME="playlist"
+IMAGE_NAME="trading"
 CONTAINER_TAG="1.0.0"
 HOST_PORT=5000
 CONTAINER_PORT=5000
