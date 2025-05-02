@@ -5,7 +5,7 @@ from trading.utils.logger import configure_logger
 
 BASE_URL = "https://alpha-vantage.p.rapidapi.com/query"
 API_HOST = "alpha-vantage.p.rapidapi.com"
-API_KEY = os.getenv("RAPIDAPI_KEY")  
+API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")  
 
 logger = logging.getLogger(__name__)
 configure_logger(logger)
