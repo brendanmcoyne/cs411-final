@@ -181,7 +181,7 @@ class Stocks(db.Model):
 
 
     @classmethod
-    def lookup_stock_details(ticker: str) -> dict:
+    def lookup_stock_details(cls, ticker: str) -> dict:
         """
         Looks up details for a given stock.
 
@@ -227,12 +227,13 @@ class Stocks(db.Model):
             overview_data = overview_resp.json()
             description = overview_data.get("Description", "Description not available")
 
-            {
+            response =  {
                 "ticker": ticker,
                 "current_price": current_price,
                 "description": description,
                 "historical_prices": historical_prices
             }
+            return response
 
         except Exception as e:
             logger.error(f"Failed to look up stock details for {ticker}: {e}")

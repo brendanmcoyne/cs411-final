@@ -137,53 +137,47 @@ def test_delete_stock_db_failure(session, stock_apple, mocker):
 
     rollback_mock.assert_called_once()
 
-def test_lookup_stock_details_apple_success(mocker):
-    """Test successful lookup of Apple stock details."""
-    mock_details = {
-        "ticker": "AAPL",
-        "name": "Apple Inc.",
-        "exchange": "NASDAQ",
-        "industry": "Technology",
-        "price": 174.35
+def test_lookup_stock_details_success(mocker):
+    """Test successful lookup of stock details."""
+    # Patch price lookup
+    mocker.patch("trading.models.stock_model.get_current_price", return_value=174.35)
+
+    # First API call → TIME_SERIES_DAILY_ADJUSTED
+    mock_hist_response = mocker.Mock()
+    mock_hist_response.json.return_value = {
+        "Time Series (Daily)": {
+            "2024-01-02": {"4. close": "175.00"},
+            "2024-01-01": {"4. close": "174.00"},
+        }
     }
-    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=mock_details)
+
+    # Second API call → OVERVIEW
+    mock_overview_response = mocker.Mock()
+    mock_overview_response.json.return_value = {
+        "Description": "Apple Inc. designs and manufactures consumer electronics."
+    }
+
+    # Patch requests.get with both responses in order
+    mocker.patch("trading.models.stock_model.requests.get", side_effect=[mock_hist_response, mock_overview_response])
 
     result = Stocks.lookup_stock_details("AAPL")
 
     assert result["ticker"] == "AAPL"
-    assert result["name"] == "Apple Inc."
-    assert result["price"] == 174.35
-
-
-def test_lookup_stock_details_google_success(mocker):
-    """Test successful lookup of Google stock details."""
-    mock_details = {
-        "ticker": "GOOGL",
-        "name": "Alphabet Inc.",
-        "exchange": "NASDAQ",
-        "industry": "Technology",
-        "price": 2805.67
-    }
-    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=mock_details)
-
-    result = Stocks.lookup_stock_details("GOOGL")
-
-    assert result["ticker"] == "GOOGL"
-    assert result["name"] == "Alphabet Inc."
-    assert result["price"] == 2805.67
-
+    assert result["current_price"] == 174.35
+    assert result["description"] == "Apple Inc. designs and manufactures consumer electronics."
+    assert len(result["historical_prices"]) == 2
 
 def test_lookup_stock_details_not_found(mocker):
     """Test lookup fails with invalid ticker."""
-    mocker.patch("trading.models.stock_model.fetch_stock_details", return_value=None)
+    mocker.patch("trading.models.stock_model.get_current_price", return_value=None)
 
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ValueError, match="No historical data found"):
         Stocks.lookup_stock_details("INVALID")
 
 
 def test_lookup_stock_details_exception(mocker):
     """Test lookup raises on unexpected error."""
-    mocker.patch("trading.models.stock_model.fetch_stock_details", side_effect=Exception("API error"))
+    mocker.patch("trading.models.stock_model.get_current_price", side_effect=Exception("API error"))
 
     with pytest.raises(Exception, match="API error"):
         Stocks.lookup_stock_details("AAPL")

@@ -4,7 +4,7 @@ import time
 from trading.models.portfolio_model import PortfolioModel
 from trading.models.stock_model import Stocks
 from trading.db import db
-
+from sqlalchemy.exc import SQLAlchemyError
 
 @pytest.fixture()
 def portfolio_model():

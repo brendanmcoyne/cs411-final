@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from typing import List
+from sqlalchemy.exc import SQLAlchemyError
 
 from trading.models.stock_model import Stocks
 from trading.utils.api_utils import get_current_price
@@ -113,7 +114,7 @@ class PortfolioModel:
             result = []
             total_value = self.calculate_portfolio_value()
 
-            for ticker, quantity in self.portfolio.item():
+            for ticker, quantity in self.portfolio.items():
                 stock = self._get_stock_from_cache_or_db(ticker)
                 holding_value = quantity * stock.update_stock()
 
@@ -327,4 +328,4 @@ class PortfolioModel:
 
 
         
-        
+
