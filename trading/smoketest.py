@@ -1,33 +1,26 @@
 import requests
-
+import time
 
 def run_smoketest():
     base_url = "http://localhost:5000/api"
     username = "testuser"
     password = "testpass"
 
-    # Define mock stocks
-    stock_mock1 = {
-        "ticker": "MOCK1",
-        "current_price": 123.45
-    }
-
-    stock_mock2 = {
-        "ticker": "MOCK2",
-        "current_price": 456.78
-    }
+    # Valid tickers to use in testing
+    ticker1 = "AAPL"
+    ticker2 = "GOOGL"
 
     # Health check
     health_response = requests.get(f"{base_url}/health")
     assert health_response.status_code == 200
     assert health_response.json()["status"] == "success"
-    print(" Health check passed")
+    print("✅ Health check passed")
 
     # Reset users
     reset_users_response = requests.delete(f"{base_url}/reset-users")
     assert reset_users_response.status_code == 200
     assert reset_users_response.json()["status"] == "success"
-    print(" Reset users successful")
+    print("✅ Reset users successful")
 
     # Create user
     create_user_response = requests.put(f"{base_url}/create-user", json={
@@ -36,7 +29,7 @@ def run_smoketest():
     })
     assert create_user_response.status_code == 201
     assert create_user_response.json()["status"] == "success"
-    print(" User creation successful")
+    print("✅ User creation successful")
 
     session = requests.Session()
 
@@ -47,7 +40,7 @@ def run_smoketest():
     })
     assert login_response.status_code == 200
     assert login_response.json()["status"] == "success"
-    print(" Login successful")
+    print("✅ Login successful")
 
     # Change password
     change_password_resp = session.post(f"{base_url}/change-password", json={
@@ -55,7 +48,7 @@ def run_smoketest():
     })
     assert change_password_resp.status_code == 200
     assert change_password_resp.json()["status"] == "success"
-    print(" Password change successful")
+    print("✅ Password change successful")
 
     # Login with new password
     relogin_response = session.post(f"{base_url}/login", json={
@@ -64,59 +57,60 @@ def run_smoketest():
     })
     assert relogin_response.status_code == 200
     assert relogin_response.json()["status"] == "success"
-    print(" Login with new password successful")
+    print("✅ Login with new password successful")
 
-    # Create mock stocks
-    for stock in [stock_mock1, stock_mock2]:
-        create_stock_response = session.post(f"{base_url}/create-stock", json=stock)
+    # Create real stocks
+    for ticker in [ticker1, ticker2]:
+        create_stock_response = session.post(f"{base_url}/create-stock", json={"ticker": ticker})
         assert create_stock_response.status_code == 201, f"[ERROR] {create_stock_response.text}"
         assert create_stock_response.json()["status"] == "success"
-        print(f" Created stock {stock['ticker']} successfully")
-
+        print(f"✅ Created stock {ticker} successfully")
+    time.sleep(60)
     # Buy stock
     buy_response = session.post(f"{base_url}/portfolio/buy", json={
-        "ticker": "MOCK1",
+        "ticker": ticker1,
         "shares": 3
     })
     assert buy_response.status_code == 200, f"[ERROR] Buy failed: {buy_response.text}"
     assert buy_response.json()["status"] == "success"
-    print(" Buy stock successful")
+    print("✅ Buy stock successful")
 
     # Sell stock
     sell_response = session.post(f"{base_url}/portfolio/sell", json={
-        "ticker": "MOCK1",
+        "ticker": ticker1,
         "shares": 1
     })
+
     assert sell_response.status_code == 200, f"[ERROR] Sell failed: {sell_response.text}"
     assert sell_response.json()["status"] == "success"
-    print(" Sell stock successful")
+    print("✅ Sell stock successful")
 
     # Portfolio value
     value_response = session.get(f"{base_url}/portfolio/value")
     assert value_response.status_code == 200
     assert value_response.json()["status"] == "success"
-    print(" Portfolio value retrieval successful")
-
+    print("✅ Portfolio value retrieval successful")
+    time.sleep(60)
     # Portfolio details
     details_response = session.get(f"{base_url}/portfolio/details")
     assert details_response.status_code == 200
     assert details_response.json()["status"] == "success"
-    print(" Portfolio details retrieval successful")
+    print("✅ Portfolio details retrieval successful")
 
     # Logout
     logout_response = session.post(f"{base_url}/logout")
     assert logout_response.status_code == 200
     assert logout_response.json()["status"] == "success"
-    print(" Logout successful")
+    print("✅ Logout successful")
 
     # Confirm API protects from actions when logged out
     failed_buy_response = session.post(f"{base_url}/portfolio/buy", json={
-        "ticker": "MOCK2",
+        "ticker": ticker2,
         "shares": 1
     })
     assert failed_buy_response.status_code == 401
     assert failed_buy_response.json()["status"] == "error"
-    print(" Unauthorized buy blocked as expected")
+    print("✅ Unauthorized buy blocked as expected")
 
 
 if __name__ == "__main__":

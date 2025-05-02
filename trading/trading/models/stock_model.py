@@ -41,7 +41,7 @@ class Stocks(db.Model):
             raise ValueError("Current price must be a positive number.")
 
     @classmethod
-    def create_stock(cls, ticker: str, current_price: float) -> None:
+    def create_stock(cls, ticker: str) -> None:
         """
         Creates a new stock in the stocks table using SQLAlchemy.
 
@@ -53,26 +53,39 @@ class Stocks(db.Model):
             SQLAlchemyError: For database-related issues.
         """
         logger.info(f"Received request to create stock: {ticker}")
-
-        if not ticker or not isinstance(ticker, str):
-            raise ValueError("Invalid ticker")
-
-        if not isinstance(current_price, (int, float)) or current_price <= 0:
-            raise ValueError("Current price must be a positive number")
-
-        existing = cls.query.filter_by(ticker=ticker.upper()).first()
-        if existing:
-            raise ValueError(f"Stock with ticker '{ticker}' already exists.")
-
-        stock = cls(ticker=ticker.upper(), current_price=current_price)
+        if not is_valid_ticker(ticker):
+            logger.warning(f"Invalid ticker symbol: {ticker}")
+            raise ValueError(f"Ticker '{ticker}' is not a valid stock symbol.")
+        try:
+            stock = Stocks(
+                ticker=ticker.strip().upper(),
+                current_price=get_current_price(ticker)
+            )
+            stock.validate()
+        except ValueError as e:
+            logger.warning(f"Validation failed: {e}")
+            raise
 
         try:
+            existing = Stocks.query.filter_by(ticker=ticker.strip().upper()).first()
+            if existing:
+                logger.error(f"Stock already exists: {ticker}")
+                raise ValueError(f"Stock with ticker '{ticker}' already exists.")
+
             db.session.add(stock)
             db.session.commit()
-        except Exception as e:
+            logger.info(f"Stock successfully added: {ticker}")
+
+        except IntegrityError:
+            logger.error(f"Stock already exists: {ticker}")
             db.session.rollback()
-            logger.error(f"Error saving stock: {e}")
+            raise ValueError(f"Stock with ticker '{ticker}' already exists.")
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while creating stock: {e}")
+            db.session.rollback()
             raise
+
 
     @classmethod
     def delete_stock(cls, stock_id: int) -> None:
@@ -103,38 +116,26 @@ class Stocks(db.Model):
             db.session.rollback()
             raise
     
-
-    @classmethod
-    def update_stock(cls, ticker: str) -> None:
+    def update_stock(self) -> None:
         """
         Updates the current price of a stock to reflect the new value.
 
-        Args:
-            ticker (string): The ID of the stock to delete.
-
         Raises:
-            ValueError: If the stock with the given ID does not exist.
             SQLAlchemyError: For any database-related issues.
         """
-        logger.info(f"Received request to update stock price of stock {ticker}")
-        price = get_current_price(ticker)
+        logger.info(f"Updating price for stock {self.ticker}")
+        price = get_current_price(self.ticker)
 
         try:
-            stock = cls.query.filter_by(ticker=ticker.upper()).first()
-            if not stock:
-                logger.warning(f"Attempted to update non-existent stock {ticker}")
-                raise ValueError(f"Stock with ticker: {ticker} not found")
-
-            logger.info(f"Updating stock {ticker} price from {stock.current_price} to {price}")
-            stock.current_price = price
-
+            self.current_price = price
             db.session.commit()
-            logger.info(f"Successfully updated stock {ticker} to new price: {price}")
-
+            logger.info(f"Updated {self.ticker} to new price {price}")
         except SQLAlchemyError as e:
-            logger.error(f"Database error while updating stock {ticker}: {e}")
+            logger.error(f"Failed to update stock {self.ticker}: {e}")
             db.session.rollback()
             raise
+
+        return price
 
     @classmethod
     def get_stock_by_ticker(cls, ticker: str) -> "Stocks":

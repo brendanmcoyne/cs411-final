@@ -10,7 +10,7 @@ API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 logger = logging.getLogger(__name__)
 configure_logger(logger)
 
-def get_current_price(cls, ticker: str) -> float:
+def get_current_price(ticker: str) -> float:
     """Fetch the current stock price via RapidAPI.
     
     Args:
@@ -28,13 +28,13 @@ def get_current_price(cls, ticker: str) -> float:
     }
 
     headers = {
-        "x-rapidapi-host": cls.API_HOST,
-        "x-rapidapi-key": cls.API_KEY
+        "x-rapidapi-host": API_HOST,
+        "x-rapidapi-key": API_KEY
     }
 
     try:
         logger.debug(f"Sending request to Alpha Vantage with params: {params}")
-        response = requests.get(cls.BASE_URL, headers=headers, params=params, timeout=5)
+        response = requests.get(BASE_URL, headers=headers, params=params, timeout=5)
         response.raise_for_status()
         logger.debug("Received response from Alpha Vantage")
 
@@ -49,10 +49,10 @@ def get_current_price(cls, ticker: str) -> float:
     except Exception as e:
         logger.error(f"Failed to get price for {ticker}: {e}", exc_info=True)
         raise ValueError(f"Could not fetch price for {ticker}")
-    
+
 def is_valid_ticker(ticker: str) -> bool:
     """Determines whether the ticker is an actual stock
-    
+
     Args:
         ticker (String) - The string for the Stock's ticker
 
@@ -75,4 +75,3 @@ def is_valid_ticker(ticker: str) -> bool:
     except Exception as e:
         logger.error(f"Error validating ticker {ticker}: {e}")
         return False
-

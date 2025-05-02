@@ -319,7 +319,6 @@ def create_app(config_class=ProductionConfig) -> Flask:
         try:
             data = request.get_json()
             ticker = data.get("ticker", "").strip().upper()
-            current_price = data.get("current_price")
 
             if not ticker or not isinstance(ticker, str):
                 app.logger.warning("Missing or invalid ticker in request")
@@ -328,11 +327,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
                     "message": "Missing or invalid 'ticker' in request body"
                 }), 400)
 
-            # Only fetch price from API if not explicitly passed (i.e., real stocks)
-            if current_price is None:
-                current_price = get_current_price(ticker)
-
-            Stocks.create_stock(ticker=ticker, current_price=current_price)
+            Stocks.create_stock(ticker=ticker)
 
             app.logger.info(f"Stock '{ticker}' successfully added")
             return make_response(jsonify({
@@ -354,6 +349,7 @@ def create_app(config_class=ProductionConfig) -> Flask:
                 "message": "An internal error occurred while creating the stock",
                 "details": str(e)
             }), 500)
+
 
     @app.route('/api/delete-stock/<int:stock_id>', methods=['DELETE'])
     @login_required

@@ -36,18 +36,11 @@ def test_update_stock_success(session, mocker, stock_apple):
     mock_price = 250.00
     mocker.patch("trading.models.stock_model.get_current_price", return_value=mock_price)
 
-    Stocks.update_stock("AAPL")
+    stock_apple.update_stock()
 
     updated = Stocks.query.filter_by(ticker="AAPL").first()
     assert updated.current_price == mock_price
 
-def test_update_stock_not_found(mocker):
-    """Test that a ValueError is raised when stock does not exist."""
-    mocker.patch("trading.models.stock_model.get_current_price", return_value=300.00)
-
-    with pytest.raises(ValueError, match="not found"):
-        Stocks.update_stock("NOTREAL")
-
 def test_update_stock_db_failure(session, mocker, stock_apple):
     """Test that a SQLAlchemyError triggers rollback and re-raises."""
     session.add(stock_apple)
@@ -58,21 +51,7 @@ def test_update_stock_db_failure(session, mocker, stock_apple):
     rollback_mock = mocker.patch("trading.models.stock_model.db.session.rollback")
 
     with pytest.raises(SQLAlchemyError, match="DB fail"):
-        Stocks.update_stock("AAPL")
-
-    rollback_mock.assert_called_once()
-
-def test_update_stock_db_failure(session, mocker, stock_apple):
-    """Test that a SQLAlchemyError triggers rollback and re-raises."""
-    session.add(stock_apple)
-    session.commit()
-
-    mocker.patch("trading.models.stock_model.get_current_price", return_value=275.00)
-    mocker.patch("trading.models.stock_model.db.session.commit", side_effect=SQLAlchemyError("DB fail"))
-    rollback_mock = mocker.patch("trading.models.stock_model.db.session.rollback")
-
-    with pytest.raises(SQLAlchemyError, match="DB fail"):
-        Stocks.update_stock("AAPL")
+        stock_apple.update_stock()
 
     rollback_mock.assert_called_once()
 
@@ -81,7 +60,7 @@ def test_create_stock_success(session, mocker):
     mocker.patch("trading.models.stock_model.is_valid_ticker", return_value=True)
     mocker.patch("trading.models.stock_model.get_current_price", return_value=200.00)
 
-    Stocks.create_stock("MSFT", 200.00)
+    Stocks.create_stock("MSFT")
     created = session.query(Stocks).filter_by(ticker="MSFT").first()
 
     assert created is not None
@@ -92,7 +71,7 @@ def test_create_stock_invalid_ticker(mocker):
     mocker.patch("trading.models.stock_model.is_valid_ticker", return_value=False)
 
     with pytest.raises(ValueError, match="not a valid stock symbol"):
-        Stocks.create_stock("FAKE", 100.00)
+        Stocks.create_stock("FAKE")
 
 def test_create_stock_duplicate(session, stock_apple, mocker):
     """Test that duplicate ticker creation is rejected."""
@@ -100,7 +79,7 @@ def test_create_stock_duplicate(session, stock_apple, mocker):
     mocker.patch("trading.models.stock_model.get_current_price", return_value=174.35)
 
     with pytest.raises(ValueError, match="already exists"):
-        Stocks.create_stock("AAPL", 174.35)
+        Stocks.create_stock("AAPL")
 
 def test_create_stock_db_failure(mocker):
     """Test that a SQLAlchemyError during add triggers rollback and re-raises."""
@@ -111,7 +90,7 @@ def test_create_stock_db_failure(mocker):
     rollback_mock = mocker.patch("trading.models.stock_model.db.session.rollback")
 
     with pytest.raises(SQLAlchemyError, match="DB error"):
-        Stocks.create_stock("NFLX", 150.00)
+        Stocks.create_stock("NFLX")
 
     rollback_mock.assert_called_once()
 
